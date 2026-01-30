@@ -1,16 +1,26 @@
 # Antigravity Tools Updater - Windows Version
 # Supports Windows 10/11 64-bit (including Bootcamp)
 # Supports 51 languages with automatic system language detection
+# Version 1.2.0 - Security Enhanced
 
 param(
     [switch]$Lang,
     [switch]$ResetLang,
-    [string]$SetLang = ""
+    [string]$SetLang = "",
+    [switch]$CheckOnly,
+    [switch]$ShowChangelog,
+    [switch]$Rollback,
+    [switch]$Silent,
+    [switch]$NoBackup,
+    [string]$ProxyUrl = ""
 )
 
 # Ensure UTF-8 output
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
+
+# Version
+$UPDATER_VERSION = "1.2.0"
 
 # Settings
 $REPO_OWNER = "lbjlaq"
@@ -19,7 +29,12 @@ $APP_NAME = "Antigravity Tools"
 $SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LOCALES_DIR = Join-Path $SCRIPT_DIR "locales"
 $LANG_PREF_FILE = Join-Path $env:APPDATA "antigravity_updater_lang.txt"
-$TEMP_DIR = Join-Path $env:TEMP "AntigravityUpdater"
+$LOG_DIR = Join-Path $env:APPDATA "AntigravityUpdater"
+$LOG_FILE = Join-Path $LOG_DIR "updater.log"
+$BACKUP_DIR = Join-Path $LOG_DIR "backups"
+
+# Secure temp directory with random suffix
+$TEMP_DIR = Join-Path $env:TEMP "AntigravityUpdater_$([System.Guid]::NewGuid().ToString('N').Substring(0,8))"
 
 # Possible installation paths
 $INSTALL_PATHS = @(
@@ -61,33 +76,294 @@ $script:MSG_API_ERROR = "Cannot access GitHub API"
 $script:MSG_SELECT_LANGUAGE = "Select language"
 $script:MSG_OPENING_APP = "Opening application..."
 $script:MSG_WINDOWS_SUPPORT = "Windows 10/11 64-bit"
+$script:MSG_BACKUP_CREATED = "Backup created"
+$script:MSG_BACKUP_FAILED = "Backup failed"
+$script:MSG_ROLLBACK_SUCCESS = "Rollback successful"
+$script:MSG_ROLLBACK_FAILED = "Rollback failed"
+$script:MSG_NO_BACKUP = "No backup found"
+$script:MSG_HASH_VERIFY = "Verifying file integrity..."
+$script:MSG_HASH_FAILED = "File integrity check failed!"
+$script:MSG_HASH_OK = "File integrity verified"
+$script:MSG_SIGNATURE_CHECK = "Checking digital signature..."
+$script:MSG_SIGNATURE_OK = "Digital signature valid"
+$script:MSG_SIGNATURE_WARN = "Warning: No valid digital signature"
 $script:LANG_NAME = "English"
 $script:LANG_CODE = "en"
+
+#region Logging Functions
+
+function Initialize-Logging {
+    if (-not (Test-Path $LOG_DIR)) {
+        New-Item -ItemType Directory -Path $LOG_DIR -Force | Out-Null
+    }
+}
+
+function Write-Log {
+    param(
+        [string]$Message,
+        [string]$Level = "INFO"
+    )
+
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logEntry = "[$timestamp] [$Level] $Message"
+
+    try {
+        Add-Content -Path $LOG_FILE -Value $logEntry -ErrorAction SilentlyContinue
+    } catch {}
+
+    # Keep log file under 1MB
+    if ((Test-Path $LOG_FILE) -and (Get-Item $LOG_FILE).Length -gt 1MB) {
+        $content = Get-Content $LOG_FILE -Tail 1000
+        Set-Content -Path $LOG_FILE -Value $content
+    }
+}
+
+#endregion
+
+#region Security Functions
+
+function Test-SafePath {
+    param(
+        [string]$Path,
+        [string]$BasePath
+    )
+
+    try {
+        $resolvedPath = [System.IO.Path]::GetFullPath($Path)
+        $resolvedBase = [System.IO.Path]::GetFullPath($BasePath)
+        return $resolvedPath.StartsWith($resolvedBase, [StringComparison]::OrdinalIgnoreCase)
+    } catch {
+        return $false
+    }
+}
+
+function Test-ValidLanguageCode {
+    param([string]$LangCode)
+
+    # Only allow valid language codes (2 letters or 2-2 format)
+    if ($LangCode -notmatch '^[a-z]{2}(-[A-Z]{2})?$') {
+        return $false
+    }
+
+    return $LANG_CODES -contains $LangCode
+}
+
+function Get-FileHashSHA256 {
+    param([string]$FilePath)
+
+    if (-not (Test-Path $FilePath)) {
+        return $null
+    }
+
+    try {
+        return (Get-FileHash -Path $FilePath -Algorithm SHA256).Hash
+    } catch {
+        return $null
+    }
+}
+
+function Test-FileSignature {
+    param([string]$FilePath)
+
+    if (-not (Test-Path $FilePath)) {
+        return $false
+    }
+
+    try {
+        $sig = Get-AuthenticodeSignature -FilePath $FilePath -ErrorAction SilentlyContinue
+        return ($sig.Status -eq "Valid")
+    } catch {
+        return $false
+    }
+}
+
+function Test-DownloadedFile {
+    param(
+        [string]$FilePath,
+        [string]$ExpectedHash = ""
+    )
+
+    # Check file exists and has content
+    if (-not (Test-Path $FilePath)) {
+        Write-Log "Downloaded file not found: $FilePath" "ERROR"
+        return $false
+    }
+
+    $fileInfo = Get-Item $FilePath
+    if ($fileInfo.Length -eq 0) {
+        Write-Log "Downloaded file is empty: $FilePath" "ERROR"
+        return $false
+    }
+
+    # Verify hash if provided
+    if ($ExpectedHash) {
+        Write-ColorOutput "$script:MSG_HASH_VERIFY" "Blue"
+        $actualHash = Get-FileHashSHA256 $FilePath
+
+        if ($actualHash -ne $ExpectedHash) {
+            Write-ColorOutput "$script:MSG_HASH_FAILED" "Red"
+            Write-Log "Hash mismatch. Expected: $ExpectedHash, Got: $actualHash" "ERROR"
+            return $false
+        }
+
+        Write-ColorOutput "$script:MSG_HASH_OK" "Green"
+        Write-Log "Hash verified: $actualHash" "INFO"
+    }
+
+    # Check digital signature for exe/msi
+    $ext = [System.IO.Path]::GetExtension($FilePath).ToLower()
+    if ($ext -in @(".exe", ".msi")) {
+        Write-ColorOutput "$script:MSG_SIGNATURE_CHECK" "Blue"
+
+        if (Test-FileSignature $FilePath) {
+            Write-ColorOutput "$script:MSG_SIGNATURE_OK" "Green"
+            Write-Log "Digital signature valid" "INFO"
+        } else {
+            Write-ColorOutput "$script:MSG_SIGNATURE_WARN" "Yellow"
+            Write-Log "No valid digital signature found" "WARN"
+            # Continue anyway but warn user
+        }
+    }
+
+    return $true
+}
+
+#endregion
+
+#region Backup Functions
+
+function New-Backup {
+    param([string]$AppPath)
+
+    if (-not $AppPath -or -not (Test-Path $AppPath)) {
+        return $null
+    }
+
+    try {
+        if (-not (Test-Path $BACKUP_DIR)) {
+            New-Item -ItemType Directory -Path $BACKUP_DIR -Force | Out-Null
+        }
+
+        $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+        $backupName = "backup_$timestamp"
+        $backupPath = Join-Path $BACKUP_DIR $backupName
+
+        Copy-Item -Path $AppPath -Destination $backupPath -Recurse -Force
+
+        # Keep only last 3 backups
+        $backups = Get-ChildItem $BACKUP_DIR -Directory | Sort-Object CreationTime -Descending
+        if ($backups.Count -gt 3) {
+            $backups | Select-Object -Skip 3 | Remove-Item -Recurse -Force
+        }
+
+        Write-Log "Backup created: $backupPath" "INFO"
+        return $backupPath
+    } catch {
+        Write-Log "Backup failed: $_" "ERROR"
+        return $null
+    }
+}
+
+function Restore-Backup {
+    $backups = Get-ChildItem $BACKUP_DIR -Directory -ErrorAction SilentlyContinue |
+               Sort-Object CreationTime -Descending |
+               Select-Object -First 1
+
+    if (-not $backups) {
+        Write-ColorOutput "$script:MSG_NO_BACKUP" "Red"
+        Write-Log "No backup found for rollback" "ERROR"
+        return $false
+    }
+
+    try {
+        $targetPath = Join-Path $env:LOCALAPPDATA "Antigravity Tools"
+
+        if (Test-Path $targetPath) {
+            Remove-Item -Path $targetPath -Recurse -Force
+        }
+
+        Copy-Item -Path $backups.FullName -Destination $targetPath -Recurse -Force
+
+        Write-ColorOutput "$script:MSG_ROLLBACK_SUCCESS" "Green"
+        Write-Log "Rollback successful from: $($backups.FullName)" "INFO"
+        return $true
+    } catch {
+        Write-ColorOutput "$script:MSG_ROLLBACK_FAILED" "Red"
+        Write-Log "Rollback failed: $_" "ERROR"
+        return $false
+    }
+}
+
+#endregion
+
+#region UI Functions
 
 function Write-ColorOutput {
     param(
         [string]$Message,
         [string]$Color = "White"
     )
-    Write-Host $Message -ForegroundColor $Color
+
+    if (-not $Silent) {
+        Write-Host $Message -ForegroundColor $Color
+    }
 }
+
+function Show-Progress {
+    param(
+        [int]$Percent,
+        [string]$Status
+    )
+
+    if (-not $Silent) {
+        $width = 40
+        $filled = [Math]::Floor($width * $Percent / 100)
+        $empty = $width - $filled
+        $bar = "[" + ("=" * $filled) + (" " * $empty) + "]"
+        Write-Host "`r$bar $Percent% $Status" -NoNewline
+    }
+}
+
+#endregion
+
+#region Language Functions
 
 function Load-Language {
     param([string]$LangCode)
 
+    # Validate language code format
+    if (-not (Test-ValidLanguageCode $LangCode)) {
+        Write-Log "Invalid language code: $LangCode" "WARN"
+        return $false
+    }
+
     $langFile = Join-Path $LOCALES_DIR "$LangCode.ps1"
 
+    # Security: Verify path is within locales directory
+    if (-not (Test-SafePath $langFile $LOCALES_DIR)) {
+        Write-Log "Path traversal attempt blocked: $langFile" "ERROR"
+        return $false
+    }
+
     if (Test-Path $langFile) {
-        . $langFile
-        return $true
-    } else {
-        # Fallback to English
-        $enFile = Join-Path $LOCALES_DIR "en.ps1"
-        if (Test-Path $enFile) {
-            . $enFile
+        try {
+            . $langFile
+            Write-Log "Language loaded: $LangCode" "INFO"
             return $true
+        } catch {
+            Write-Log "Failed to load language file: $_" "ERROR"
         }
     }
+
+    # Fallback to English
+    $enFile = Join-Path $LOCALES_DIR "en.ps1"
+    if ((Test-SafePath $enFile $LOCALES_DIR) -and (Test-Path $enFile)) {
+        try {
+            . $enFile
+            return $true
+        } catch {}
+    }
+
     return $false
 }
 
@@ -165,6 +441,10 @@ function Get-SavedLanguage {
     return $false
 }
 
+#endregion
+
+#region Application Functions
+
 function Find-InstalledApp {
     foreach ($path in $INSTALL_PATHS) {
         $exePath = Join-Path $path "Antigravity Tools.exe"
@@ -200,14 +480,121 @@ function Get-InstalledVersion {
 }
 
 function Stop-AntigravityApp {
-    $processes = Get-Process -Name "Antigravity*" -ErrorAction SilentlyContinue
+    # More precise process matching
+    $processes = Get-Process | Where-Object {
+        $_.ProcessName -eq "Antigravity Tools" -or
+        $_.ProcessName -eq "AntigravityTools"
+    } -ErrorAction SilentlyContinue
+
     if ($processes) {
+        Write-Log "Stopping processes: $($processes.ProcessName -join ', ')" "INFO"
         $processes | Stop-Process -Force -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 2
     }
 }
 
-# Main execution
+function Get-ReleaseInfo {
+    param([string]$ProxyUrl = "")
+
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $releaseUrl = "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest"
+
+        $webParams = @{
+            Uri = $releaseUrl
+            UseBasicParsing = $true
+            Headers = @{ "User-Agent" = "AntigravityUpdater/$UPDATER_VERSION" }
+        }
+
+        # Proxy support
+        if ($ProxyUrl) {
+            $webParams.Proxy = $ProxyUrl
+            $webParams.ProxyUseDefaultCredentials = $true
+            Write-Log "Using proxy: $ProxyUrl" "INFO"
+        }
+
+        return Invoke-RestMethod @webParams
+    } catch {
+        Write-Log "Failed to get release info: $_" "ERROR"
+        return $null
+    }
+}
+
+function Show-Changelog {
+    param($ReleaseInfo)
+
+    if (-not $ReleaseInfo) {
+        Write-ColorOutput "Cannot retrieve changelog" "Red"
+        return
+    }
+
+    Write-ColorOutput "`n========================================================" "Cyan"
+    Write-ColorOutput "   Changelog - v$($ReleaseInfo.tag_name)" "Cyan"
+    Write-ColorOutput "========================================================`n" "Cyan"
+
+    if ($ReleaseInfo.body) {
+        # Clean markdown formatting for console
+        $body = $ReleaseInfo.body -replace '#{1,6}\s*', '' -replace '\*\*', '' -replace '\*', '' -replace '`', ''
+        Write-Host $body
+    } else {
+        Write-Host "No changelog available"
+    }
+
+    Write-Host ""
+}
+
+function Invoke-Download {
+    param(
+        [string]$Url,
+        [string]$OutFile,
+        [string]$ProxyUrl = ""
+    )
+
+    try {
+        $webParams = @{
+            Uri = $Url
+            OutFile = $OutFile
+            UseBasicParsing = $true
+        }
+
+        if ($ProxyUrl) {
+            $webParams.Proxy = $ProxyUrl
+            $webParams.ProxyUseDefaultCredentials = $true
+        }
+
+        # Show progress for large files
+        $ProgressPreference = 'SilentlyContinue'
+        Invoke-WebRequest @webParams
+        $ProgressPreference = 'Continue'
+
+        return $true
+    } catch {
+        Write-Log "Download failed: $_" "ERROR"
+        return $false
+    }
+}
+
+#endregion
+
+#region Main Execution
+
+# Initialize
+Initialize-Logging
+Write-Log "=== Updater started v$UPDATER_VERSION ===" "INFO"
+
+# Handle rollback
+if ($Rollback) {
+    Write-Log "Rollback requested" "INFO"
+    if (Restore-Backup) {
+        Read-Host "Press Enter to exit"
+        exit 0
+    } else {
+        Read-Host "Press Enter to exit"
+        exit 1
+    }
+}
+
+# Handle language selection
 if ($ResetLang) {
     if (Test-Path $LANG_PREF_FILE) {
         Remove-Item $LANG_PREF_FILE -Force
@@ -224,7 +611,9 @@ if ($ResetLang) {
     Show-LanguageMenu
 }
 
-Clear-Host
+if (-not $Silent) {
+    Clear-Host
+}
 
 # Architecture detection
 $ARCH = "x64"
@@ -232,7 +621,7 @@ $ARCH_NAME = "Windows 64-bit"
 
 # Display header
 Write-ColorOutput "`n========================================================" "Cyan"
-Write-ColorOutput "         $script:MSG_TITLE" "Cyan"
+Write-ColorOutput "         $script:MSG_TITLE v$UPDATER_VERSION" "Cyan"
 Write-ColorOutput "========================================================`n" "Cyan"
 
 Write-ColorOutput "   $script:LANG_NAME (use -Lang to change)`n" "Magenta"
@@ -244,35 +633,50 @@ if ($APP_PATH) {
     $CURRENT_VERSION = Get-InstalledVersion $APP_PATH
     if (-not $CURRENT_VERSION) { $CURRENT_VERSION = $script:MSG_UNKNOWN }
     Write-ColorOutput "   $($script:MSG_CURRENT): $CURRENT_VERSION" "Green"
+    Write-Log "Current version: $CURRENT_VERSION" "INFO"
 } else {
     $CURRENT_VERSION = $script:MSG_NOT_INSTALLED
     Write-ColorOutput "   $($script:MSG_CURRENT): $CURRENT_VERSION" "Yellow"
+    Write-Log "Application not installed" "INFO"
 }
 
 # Get latest version from GitHub
 Write-ColorOutput "$script:MSG_CHECKING_LATEST" "Blue"
 
-try {
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    $releaseUrl = "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest"
-    $releaseInfo = Invoke-RestMethod -Uri $releaseUrl -UseBasicParsing
-} catch {
+$releaseInfo = Get-ReleaseInfo -ProxyUrl $ProxyUrl
+
+if (-not $releaseInfo) {
     Write-ColorOutput "$script:MSG_API_ERROR" "Red"
-    Write-ColorOutput "Error: $_" "Red"
-    Read-Host "Press Enter to exit"
+    if (-not $Silent) { Read-Host "Press Enter to exit" }
     exit 1
 }
 
 $LATEST_VERSION = $releaseInfo.tag_name -replace '^v', ''
 Write-ColorOutput "   $($script:MSG_LATEST): $LATEST_VERSION" "Green"
 Write-ColorOutput "   $($script:MSG_ARCH): $ARCH_NAME ($ARCH)" "Cyan"
+Write-Log "Latest version: $LATEST_VERSION" "INFO"
+
+# Show changelog if requested
+if ($ShowChangelog) {
+    Show-Changelog $releaseInfo
+    if (-not $Silent) { Read-Host "Press Enter to continue" }
+}
 
 # Check if update is needed
 if ($CURRENT_VERSION -eq $LATEST_VERSION) {
     Write-Host ""
     Write-ColorOutput "$script:MSG_ALREADY_LATEST" "Green"
+    Write-Log "Already on latest version" "INFO"
     Write-Host ""
-    Read-Host "Press Enter to exit"
+    if (-not $Silent) { Read-Host "Press Enter to exit" }
+    exit 0
+}
+
+# Check-only mode
+if ($CheckOnly) {
+    Write-Host ""
+    Write-ColorOutput "Update available: $CURRENT_VERSION -> $LATEST_VERSION" "Yellow"
+    Write-Log "Check-only mode: update available" "INFO"
     exit 0
 }
 
@@ -293,12 +697,14 @@ if (-not $windowsAsset) {
 
 if (-not $windowsAsset) {
     Write-ColorOutput "No Windows download found in release" "Red"
-    Read-Host "Press Enter to exit"
+    Write-Log "No Windows asset found in release" "ERROR"
+    if (-not $Silent) { Read-Host "Press Enter to exit" }
     exit 1
 }
 
 $DOWNLOAD_URL = $windowsAsset.browser_download_url
 $DOWNLOAD_NAME = $windowsAsset.name
+Write-Log "Download URL: $DOWNLOAD_URL" "INFO"
 
 # Create temp directory
 if (-not (Test-Path $TEMP_DIR)) {
@@ -307,22 +713,36 @@ if (-not (Test-Path $TEMP_DIR)) {
 
 $DOWNLOAD_PATH = Join-Path $TEMP_DIR $DOWNLOAD_NAME
 
+# Create backup before update
+if (-not $NoBackup -and $APP_PATH) {
+    Write-ColorOutput "Creating backup..." "Blue"
+    $backupPath = New-Backup $APP_PATH
+    if ($backupPath) {
+        Write-ColorOutput "   $script:MSG_BACKUP_CREATED" "Green"
+    } else {
+        Write-ColorOutput "   $script:MSG_BACKUP_FAILED" "Yellow"
+    }
+}
+
 # Download
 Write-ColorOutput "$script:MSG_DOWNLOADING" "Blue"
 Write-Host "   $DOWNLOAD_URL"
 
-try {
-    $ProgressPreference = 'SilentlyContinue'
-    Invoke-WebRequest -Uri $DOWNLOAD_URL -OutFile $DOWNLOAD_PATH -UseBasicParsing
-    $ProgressPreference = 'Continue'
-} catch {
+if (-not (Invoke-Download -Url $DOWNLOAD_URL -OutFile $DOWNLOAD_PATH -ProxyUrl $ProxyUrl)) {
     Write-ColorOutput "$script:MSG_DOWNLOAD_FAILED" "Red"
-    Write-ColorOutput "Error: $_" "Red"
-    Read-Host "Press Enter to exit"
+    if (-not $Silent) { Read-Host "Press Enter to exit" }
     exit 1
 }
 
 Write-ColorOutput "$script:MSG_DOWNLOAD_COMPLETE" "Green"
+
+# Verify downloaded file
+if (-not (Test-DownloadedFile $DOWNLOAD_PATH)) {
+    Write-ColorOutput "File verification failed" "Red"
+    Remove-Item -Path $TEMP_DIR -Recurse -Force -ErrorAction SilentlyContinue
+    if (-not $Silent) { Read-Host "Press Enter to exit" }
+    exit 1
+}
 
 # Close running application
 Write-ColorOutput "$script:MSG_CLOSING_APP" "Blue"
@@ -334,9 +754,11 @@ $fileExt = [System.IO.Path]::GetExtension($DOWNLOAD_NAME).ToLower()
 if ($fileExt -eq ".msi") {
     Write-ColorOutput "$script:MSG_COPYING_NEW" "Blue"
     $msiArgs = "/i `"$DOWNLOAD_PATH`" /quiet /norestart"
+    Write-Log "Installing MSI: $msiArgs" "INFO"
     Start-Process msiexec.exe -ArgumentList $msiArgs -Wait
 } elseif ($fileExt -eq ".exe") {
     Write-ColorOutput "$script:MSG_COPYING_NEW" "Blue"
+    Write-Log "Installing EXE: $DOWNLOAD_PATH" "INFO"
     Start-Process -FilePath $DOWNLOAD_PATH -ArgumentList "/S" -Wait
 } elseif ($fileExt -eq ".zip") {
     Write-ColorOutput "$script:MSG_EXTRACTING" "Blue"
@@ -346,7 +768,8 @@ if ($fileExt -eq ".msi") {
         Expand-Archive -Path $DOWNLOAD_PATH -DestinationPath $extractPath -Force
     } catch {
         Write-ColorOutput "$script:MSG_EXTRACT_FAILED" "Red"
-        Read-Host "Press Enter to exit"
+        Write-Log "Extraction failed: $_" "ERROR"
+        if (-not $Silent) { Read-Host "Press Enter to exit" }
         exit 1
     }
 
@@ -379,9 +802,11 @@ if ($fileExt -eq ".msi") {
         Copy-Item -Path "$sourceDir\*" -Destination $targetPath -Recurse -Force
 
         Write-ColorOutput "$script:MSG_COPIED" "Green"
+        Write-Log "Application installed to: $targetPath" "INFO"
     } else {
         Write-ColorOutput "$script:MSG_APP_NOT_FOUND" "Red"
-        Read-Host "Press Enter to exit"
+        Write-Log "Application not found in archive" "ERROR"
+        if (-not $Silent) { Read-Host "Press Enter to exit" }
         exit 1
     }
 }
@@ -399,4 +824,8 @@ Write-ColorOutput "   $($script:MSG_OLD_VERSION): $CURRENT_VERSION" "Yellow"
 Write-ColorOutput "   $($script:MSG_NEW_VERSION_LABEL): $LATEST_VERSION" "Green"
 Write-Host ""
 
-Read-Host "Press Enter to exit"
+Write-Log "Update completed: $CURRENT_VERSION -> $LATEST_VERSION" "INFO"
+
+if (-not $Silent) { Read-Host "Press Enter to exit" }
+
+#endregion

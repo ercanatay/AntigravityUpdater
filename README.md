@@ -1,17 +1,19 @@
 # Antigravity Tools Updater
 
-A lightweight, multi-language macOS application that automatically updates [Antigravity Tools](https://github.com/lbjlaq/Antigravity-Manager) to the latest version with a single click.
+A lightweight, multi-language application that automatically updates [Antigravity Tools](https://github.com/lbjlaq/Antigravity-Manager) to the latest version with a single click.
 
-![Platform](https://img.shields.io/badge/platform-macOS-blue)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-blue)
 ![Languages](https://img.shields.io/badge/languages-51-green)
 ![License](https://img.shields.io/badge/license-MIT-brightgreen)
-![Architecture](https://img.shields.io/badge/arch-Apple%20Silicon%20%7C%20Intel-orange)
+![Architecture](https://img.shields.io/badge/arch-Apple%20Silicon%20%7C%20Intel%20%7C%20x64-orange)
 
 ## Features
 
 - **One-Click Update**: Automatically downloads and installs the latest version
 - **Multi-Language Support**: 51 languages with automatic system language detection
-- **Universal Binary**: Supports both Apple Silicon (M1/M2/M3) and Intel Macs
+- **Cross-Platform**: Supports macOS and Windows
+- **Universal Binary (macOS)**: Supports both Apple Silicon (M1/M2/M3) and Intel Macs
+- **Windows 10/11 (64-bit)**: Full support including Bootcamp installations
 - **Smart Detection**: Compares installed version with latest GitHub release
 - **Safe Installation**: Removes macOS quarantine flags automatically
 - **Persistent Preferences**: Remembers your language choice
@@ -43,19 +45,43 @@ A lightweight, multi-language macOS application that automatically updates [Anti
 
 ## Installation
 
-### Option 1: Download Release (Recommended)
+### macOS
+
+#### Option 1: Download Release (Recommended)
 
 1. Download the latest `Antigravity.Updater.zip` from [Releases](../../releases)
 2. Extract and move `Antigravity Updater.app` to your Applications folder
 3. Double-click to run
 
-### Option 2: Run Script Directly
+#### Option 2: Run Script Directly
 
 ```bash
 git clone https://github.com/ercanatay/AntigravityUpdater.git
 cd AntigravityUpdater
 chmod +x antigravity-update.sh
 ./antigravity-update.sh
+```
+
+### Windows
+
+#### Option 1: Download Installer (Recommended)
+
+1. Download `AntigravityToolsUpdater_x.x.x_x64-setup.exe` from [Releases](../../releases)
+2. Run the installer
+3. Launch from Start Menu or Desktop shortcut
+
+#### Option 2: Run Script Directly
+
+```powershell
+git clone https://github.com/ercanatay/AntigravityUpdater.git
+cd AntigravityUpdater/windows
+.\AntigravityUpdater.bat
+```
+
+Or via PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File antigravity-update.ps1
 ```
 
 ## Usage
@@ -83,6 +109,7 @@ The updater remembers your language preference and proceeds directly to update c
 
 ### Command Line Options
 
+**macOS:**
 ```bash
 # Change language
 ./antigravity-update.sh --lang
@@ -92,62 +119,81 @@ The updater remembers your language preference and proceeds directly to update c
 ./antigravity-update.sh --reset-lang
 ```
 
+**Windows:**
+```powershell
+# Change language
+.\antigravity-update.ps1 -Lang
+
+# Reset language preference
+.\antigravity-update.ps1 -ResetLang
+
+# Set specific language
+.\antigravity-update.ps1 -SetLang tr
+```
+
 ## How It Works
 
-1. **Version Check**: Reads current installed version from app bundle
+1. **Version Check**: Reads current installed version from app bundle/executable
 2. **GitHub API**: Fetches latest release information
-3. **Download**: Downloads appropriate DMG for your architecture
-4. **Install**: Mounts DMG, copies app to /Applications
-5. **Cleanup**: Removes quarantine flags and temporary files
+3. **Download**: Downloads appropriate package for your platform/architecture
+4. **Install**: Installs the application to the appropriate location
+5. **Cleanup**: Removes temporary files (and quarantine flags on macOS)
 
 ## Project Structure
 
 ```
 AntigravityUpdater/
 ├── Antigravity Updater.app/    # macOS application bundle
-├── antigravity-update.sh       # Main updater script
-├── locales/                    # Language files
-│   ├── en.sh                   # English (default)
-│   ├── tr.sh                   # Turkish
-│   ├── de.sh                   # German
-│   └── ...                     # 18 more languages
+├── antigravity-update.sh       # macOS updater script
+├── locales/                    # macOS language files
+│   ├── en.sh
+│   ├── tr.sh
+│   └── ...
+├── windows/                    # Windows version
+│   ├── antigravity-update.ps1  # Windows PowerShell script
+│   ├── AntigravityUpdater.bat  # Batch launcher
+│   ├── installer.iss           # Inno Setup installer script
+│   ├── locales/                # Windows language files
+│   │   ├── en.ps1
+│   │   ├── tr.ps1
+│   │   └── ...
+│   └── resources/
+├── CHANGELOG.md
 ├── README.md
 └── LICENSE
 ```
 
-## Building the App Bundle
-
-The `.app` bundle is a wrapper that runs the shell script in Terminal:
-
-```
-Antigravity Updater.app/
-├── Contents/
-│   ├── Info.plist
-│   ├── MacOS/
-│   │   └── launcher           # Executable wrapper
-│   └── Resources/
-│       ├── antigravity-update.sh
-│       └── locales/
-```
-
 ## Requirements
 
+### macOS
 - macOS 10.15 (Catalina) or later
 - Internet connection
 - `/Applications` write permission
 
+### Windows
+- Windows 10 or Windows 11 (64-bit)
+- PowerShell 5.1 or later (included with Windows)
+- Internet connection
+- Works on Bootcamp Windows installations
+
 ## Troubleshooting
 
-### "App is damaged and can't be opened"
+### macOS: "App is damaged and can't be opened"
 Run this command to remove quarantine:
 ```bash
 xattr -cr /path/to/Antigravity\ Updater.app
 ```
 
-### Permission Denied
+### macOS: Permission Denied
 Ensure the script is executable:
 ```bash
 chmod +x antigravity-update.sh
+```
+
+### Windows: PowerShell Execution Policy
+If you see an execution policy error, run:
+```powershell
+powershell -ExecutionPolicy Bypass -File antigravity-update.ps1
 ```
 
 ### GitHub API Rate Limit
@@ -157,9 +203,15 @@ If you see API errors, wait a few minutes and try again. GitHub limits unauthent
 
 Contributions are welcome! To add a new language:
 
+### macOS
 1. Copy `locales/en.sh` to `locales/[lang-code].sh`
 2. Translate all `MSG_*` variables
 3. Update `LANG_CODES` and `LANG_NAMES` arrays in main script
+
+### Windows
+1. Copy `windows/locales/en.ps1` to `windows/locales/[lang-code].ps1`
+2. Translate all `$script:MSG_*` variables
+
 4. Submit a pull request
 
 ## License

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-02-04
+
+### Fixed
+- **Windows EXE Detection**: Fixed issue where updater showed "Not installed" even when Antigravity Tools was installed on Windows
+- Now detects both `antigravity_tools.exe` (current naming) and `Antigravity Tools.exe` (legacy naming)
+
+### Contributors
+- Thanks to [@nvtptest](https://github.com/nvtptest) for reporting and fixing this issue! ([#1](https://github.com/ercanatay/AntigravityUpdater/pull/1))
+
 ## [1.2.0] - 2026-01-30
 
 ### Added - Security Enhancements

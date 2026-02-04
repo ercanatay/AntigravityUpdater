@@ -3,7 +3,7 @@
 A lightweight, multi-language, cross-platform application that automatically updates [Antigravity Tools](https://github.com/lbjlaq/Antigravity-Manager) to the latest version with a single click.
 
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-1.2.0-green)
+![Version](https://img.shields.io/badge/version-1.2.1-green)
 ![Languages](https://img.shields.io/badge/languages-51-orange)
 ![License](https://img.shields.io/badge/license-MIT-brightgreen)
 ![Security](https://img.shields.io/badge/security-enhanced-purple)
@@ -335,6 +335,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - [Antigravity Tools](https://github.com/lbjlaq/Antigravity-Manager) - The application this updater supports
 - All contributors who helped with translations
+
+### Special Thanks
+- [@nvtptest](https://github.com/nvtptest) - Fixed Windows EXE detection issue ([#1](https://github.com/ercanatay/AntigravityUpdater/pull/1))
 
 ## 👤 Author
 

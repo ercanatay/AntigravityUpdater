@@ -17,6 +17,9 @@ This repository does **not** contain Antigravity Tools itself. It provides updat
 - Updater releases (this repo): https://github.com/ercanatay/AntigravityUpdater/releases
 - Antigravity Tools releases (upstream): https://github.com/lbjlaq/Antigravity-Manager/releases
 
+> ℹ️ **Release note:** Merging a PR only updates this repository's code and version references.
+> To actually publish a downloadable updater version, also create a GitHub Release (tag format: `vX.Y.Z`).
+
 ## Which Updater Should You Use?
 
 | Target | Script | What it updates |

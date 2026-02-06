@@ -1,82 +1,50 @@
 # Antigravity Tools Updater
 
-A lightweight, multi-language, cross-platform application that automatically updates [Antigravity Tools](https://github.com/lbjlaq/Antigravity-Manager) to the latest version with a single click.
+Cross-platform updater scripts for [Antigravity Tools](https://github.com/lbjlaq/Antigravity-Manager).
 
-![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue)
-![Version](https://img.shields.io/badge/version-1.4.1-green)
+This repository does **not** contain Antigravity Tools itself. It provides updaters that:
+- Check the latest release from `lbjlaq/Antigravity-Manager`
+- Compare with your installed/current version
+- Download and install/update with platform-specific logic
+
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux%20%7C%20Docker-blue)
+![Updater Release](https://img.shields.io/badge/updater-1.4.2-green)
 ![Languages](https://img.shields.io/badge/languages-51-orange)
 ![License](https://img.shields.io/badge/license-MIT-brightgreen)
-![Security](https://img.shields.io/badge/security-enhanced-purple)
 
-## ✨ Features
+## Releases
 
-### Core Features
-- **One-Click Update**: Automatically downloads and installs the latest version
-- **Multi-Language Support**: 51 languages with automatic system language detection (macOS + Windows + Linux + Docker updater)
-- **Cross-Platform**: Supports macOS, Windows, and Linux
-- **Universal Binary (macOS)**: Supports both Apple Silicon (M1/M2/M3) and Intel Macs
-- **Windows 10/11 (64-bit)**: Full support including Bootcamp installations
-- **Linux (x86_64 + aarch64)**: Auto-selects `.deb`, `.rpm`, or `.AppImage` assets
-- **Linux UX**: Localized output with shared 51-language locale files
-- **Docker Deployment Updater**: Pull latest container image and optionally restart existing container
+- Updater releases (this repo): https://github.com/ercanatay/AntigravityUpdater/releases
+- Antigravity Tools releases (upstream): https://github.com/lbjlaq/Antigravity-Manager/releases
 
-### 🔒 Security Features (v1.2.0)
-- **Path Traversal Protection**: Locale files validated to prevent directory traversal attacks
-- **Language Code Validation**: Regex-based validation ensures only valid codes accepted
-- **Hash Verification**: SHA256 integrity checking for downloaded files
-- **Code Signature Check**: Verifies app signatures (codesign on macOS, Authenticode on Windows)
-- **Secure Temp Directory**: Random suffix prevents prediction attacks
-- **TLS 1.2 Enforced**: All connections use secure protocols
+## Which Updater Should You Use?
 
-### 💾 Backup & Recovery (v1.2.0)
-- **Automatic Backup**: Creates backup before each update
-- **Rollback Support**: One-click restore to previous version
-- **Backup Rotation**: Keeps last 3 backups automatically
+| Target | Script | What it updates |
+|---|---|---|
+| macOS app install | `./antigravity-update.sh` | `/Applications/Antigravity Tools.app` |
+| Windows app install | `./windows/antigravity-update.ps1` (or `./windows/AntigravityUpdater.bat`) | Local Antigravity Tools installation |
+| Linux app install | `./linux/antigravity-update.sh` | `.deb`, `.rpm`, or `.AppImage` installation |
+| Docker deployment | `./docker/antigravity-docker-update.sh` | Docker image/tag and optional container recreate |
 
-### 📝 Logging (v1.2.0)
-- **Comprehensive Logging**: All operations logged with timestamps
-- **Log Rotation**: Automatic rotation when file exceeds 1MB
-- **Debug Support**: Full operation history for troubleshooting
+## Feature Matrix
 
-### 🛠️ Advanced Options (v1.2.0)
-- **Check-Only Mode**: Check for updates without installing
-- **Silent Mode**: Run without prompts (for automation/scripts)
-- **Changelog Display**: View release notes before updating
-- **Proxy Support**: Corporate network compatibility
+| Feature | macOS | Windows | Linux | Docker |
+|---|---|---|---|---|
+| 51-language UI | Yes | Yes | Yes | Yes |
+| Auto language detection | Yes | Yes | Yes | Yes |
+| Check-only mode | Yes | Yes | Yes | Yes |
+| Proxy support | Yes | Yes | Yes | Yes |
+| Silent mode | Yes | Yes | Yes | Yes |
+| Changelog display | Yes | Yes | Yes | No |
+| Backup before update | Yes | Yes | No | No |
+| Rollback | Yes | Yes | No | No |
+| Package-type selection | No | No | Yes | No |
+| Restart running service/container | App relaunch | App relaunch | App process stop | Optional container recreate |
 
-## 🌍 Supported Languages (51)
-
-| Language | Code | Language | Code | Language | Code |
-|----------|------|----------|------|----------|------|
-| English | `en` | Magyar | `hu` | Galego | `gl` |
-| Türkçe | `tr` | Română | `ro` | Íslenska | `is` |
-| Deutsch | `de` | Български | `bg` | فارسی | `fa` |
-| Français | `fr` | Hrvatski | `hr` | Kiswahili | `sw` |
-| Español | `es` | Srpski | `sr` | Afrikaans | `af` |
-| Italiano | `it` | Slovenčina | `sk` | Filipino | `fil` |
-| Português | `pt` | Slovenščina | `sl` | বাংলা | `bn` |
-| Русский | `ru` | Lietuvių | `lt` | தமிழ் | `ta` |
-| 简体中文 | `zh` | Latviešu | `lv` | اردو | `ur` |
-| 繁體中文 | `zh-TW` | Eesti | `et` | Te Reo Māori | `mi` |
-| 日本語 | `ja` | Català | `ca` | Cymraeg | `cy` |
-| 한국어 | `ko` | Euskara | `eu` | Suomi | `fi` |
-| العربية | `ar` | Ελληνικά | `el` | Українська | `uk` |
-| Nederlands | `nl` | עברית | `he` | Čeština | `cs` |
-| Polski | `pl` | ไทย | `th` | हिन्दी | `hi` |
-| Svenska | `sv` | Tiếng Việt | `vi` | | |
-| Norsk | `no` | Bahasa Indonesia | `id` | | |
-| Dansk | `da` | Bahasa Melayu | `ms` | | |
-
-## 📥 Installation
+## Quick Start
 
 ### macOS
 
-#### Option 1: Download Release (Recommended)
-1. Download the latest `Antigravity.Updater.zip` from [Releases](../../releases)
-2. Extract and move `Antigravity Updater.app` to your Applications folder
-3. Double-click to run
-
-#### Option 2: Run Script Directly
 ```bash
 git clone https://github.com/ercanatay/AntigravityUpdater.git
 cd AntigravityUpdater
@@ -84,40 +52,27 @@ chmod +x antigravity-update.sh
 ./antigravity-update.sh
 ```
 
-### Windows
+### Windows (PowerShell)
 
-#### Option 1: Download Portable (Recommended)
-1. Download `AntigravityToolsUpdater_1.2.0_x64-portable.zip` from [Releases](../../releases)
-2. Extract to any folder
-3. Run `AntigravityUpdater.bat`
-
-#### Option 2: Run Script Directly
 ```powershell
 git clone https://github.com/ercanatay/AntigravityUpdater.git
-cd AntigravityUpdater/windows
+cd AntigravityUpdater\windows
+powershell -ExecutionPolicy Bypass -File .\antigravity-update.ps1
+```
+
+Alternative launcher:
+
+```powershell
 .\AntigravityUpdater.bat
 ```
 
 ### Linux
 
-#### Option 1: Run Script Directly (Recommended)
 ```bash
 git clone https://github.com/ercanatay/AntigravityUpdater.git
 cd AntigravityUpdater/linux
 chmod +x antigravity-update.sh
 ./antigravity-update.sh
-```
-
-#### Option 2: Force Package Type
-```bash
-# Force .deb
-./antigravity-update.sh --format deb
-
-# Force .rpm
-./antigravity-update.sh --format rpm
-
-# Force AppImage
-./antigravity-update.sh --format appimage
 ```
 
 ### Docker
@@ -129,365 +84,226 @@ chmod +x docker/antigravity-docker-update.sh
 ./docker/antigravity-docker-update.sh --check-only
 ```
 
-## 💻 Usage
+## Requirements
 
-### Basic Usage
+### macOS
 
-On first launch, select your preferred language. The updater remembers your choice for future runs.
+- macOS 10.15+
+- `curl`
+- Optional for update checks: `python3`
+- Write permission for `/Applications`
 
-### Command Line Options
+### Windows
 
-#### macOS
+- Windows 10/11 (64-bit)
+- PowerShell 5.1+
+- Internet access
+
+### Linux
+
+- Bash
+- `curl`
+- `python3`
+- For installation:
+  - `.deb`: `apt-get`/`dpkg`
+  - `.rpm`: `dnf`, `yum`, `zypper`, or `rpm`
+  - `.AppImage`: no package manager required
+
+### Docker updater
+
+- `curl`
+- `python3`
+- Docker CLI (required for pull/restart; check-only still runs without Docker and reports latest target image)
+
+## Command Reference
+
+### macOS: `antigravity-update.sh`
+
+```text
+--lang, -l          Change language
+--reset-lang        Reset language preference
+--check-only        Check for updates only
+--changelog         Show release notes before update
+--rollback          Restore latest backup
+--silent            Minimal output
+--no-backup         Skip backup creation
+--proxy URL         Use HTTP(S) proxy
+--help, -h          Show help
+```
+
+### Windows: `windows/antigravity-update.ps1`
+
+```text
+-Lang               Change language
+-ResetLang          Reset language preference
+-SetLang <code>     Set language directly (example: tr, en, de)
+-CheckOnly          Check for updates only
+-ShowChangelog      Show release notes before update
+-Rollback           Restore latest backup
+-Silent             Minimal output
+-NoBackup           Skip backup creation
+-ProxyUrl <url>     Use proxy
+-Help               Show help
+```
+
+### Linux: `linux/antigravity-update.sh`
+
+```text
+--lang, -l          Change language
+--reset-lang        Reset language preference
+--check-only        Check for updates only
+--changelog         Show release notes before update
+--silent            Minimal output
+--proxy URL         Use HTTP(S) proxy
+--format TYPE       auto | deb | rpm | appimage
+--help, -h          Show help
+```
+
+### Docker: `docker/antigravity-docker-update.sh`
+
+```text
+--lang, -l                   Change language
+--reset-lang                 Reset language preference
+--check-only                 Check status only
+--restart-container          Recreate existing container with new image
+--container-name NAME        Container name (default: antigravity-manager)
+--image REPO                 Image repository (default: lbjlaq/antigravity-manager)
+--tag TAG                    Override target tag (default: latest upstream release tag)
+--proxy URL                  Use HTTP(S) proxy for GitHub API request
+--silent                     Minimal output
+--help, -h                   Show help
+```
+
+## Common Usage Examples
+
+### Check only (all platforms)
+
 ```bash
-# Standard update (with automatic backup)
-./antigravity-update.sh
-
-# Change language
-./antigravity-update.sh --lang
-
-# Reset language preference
-./antigravity-update.sh --reset-lang
-
-# Check for updates only (no install)
 ./antigravity-update.sh --check-only
-
-# Show changelog before update
-./antigravity-update.sh --changelog
-
-# Rollback to previous version
-./antigravity-update.sh --rollback
-
-# Silent mode (no prompts, for automation)
-./antigravity-update.sh --silent
-
-# Skip automatic backup
-./antigravity-update.sh --no-backup
-
-# Use with corporate proxy
-./antigravity-update.sh --proxy "http://proxy.company.com:8080"
-
-# Show help
-./antigravity-update.sh --help
-```
-
-#### Windows
-```powershell
-# Standard update (with automatic backup)
-.\antigravity-update.ps1
-
-# Change language
-.\antigravity-update.ps1 -Lang
-
-# Reset language preference
-.\antigravity-update.ps1 -ResetLang
-
-# Check for updates only (no install)
-.\antigravity-update.ps1 -CheckOnly
-
-# Show changelog before update
-.\antigravity-update.ps1 -ShowChangelog
-
-# Rollback to previous version
-.\antigravity-update.ps1 -Rollback
-
-# Silent mode (no prompts, for automation)
-.\antigravity-update.ps1 -Silent
-
-# Skip automatic backup
-.\antigravity-update.ps1 -NoBackup
-
-# Use with corporate proxy
-.\antigravity-update.ps1 -ProxyUrl "http://proxy.company.com:8080"
-```
-
-#### Linux
-```bash
-# Standard update
-./linux/antigravity-update.sh
-
-# Change language
-./linux/antigravity-update.sh --lang
-
-# Reset language preference
-./linux/antigravity-update.sh --reset-lang
-
-# Check for updates only (no install)
 ./linux/antigravity-update.sh --check-only
-
-# Show changelog before update
-./linux/antigravity-update.sh --changelog
-
-# Silent mode
-./linux/antigravity-update.sh --silent
-
-# Use with corporate proxy
-./linux/antigravity-update.sh --proxy "http://proxy.company.com:8080"
-
-# Select package type manually
-./linux/antigravity-update.sh --format auto
+./docker/antigravity-docker-update.sh --check-only
 ```
 
-#### Docker
+```powershell
+.\windows\antigravity-update.ps1 -CheckOnly
+```
+
+### Force Linux package type
+
 ```bash
-# Change language
+./linux/antigravity-update.sh --format deb
+./linux/antigravity-update.sh --format rpm
+./linux/antigravity-update.sh --format appimage
+```
+
+### Change language
+
+```bash
+./antigravity-update.sh --lang
+./linux/antigravity-update.sh --lang
 ./docker/antigravity-docker-update.sh --lang
+```
 
-# Reset language preference
-./docker/antigravity-docker-update.sh --reset-lang
+```powershell
+.\windows\antigravity-update.ps1 -Lang
+.\windows\antigravity-update.ps1 -SetLang tr
+```
 
-# Check only
-./docker/antigravity-docker-update.sh --check-only
+### Docker: pull and restart container
 
-# Pull latest image based on latest Antigravity-Manager release
-./docker/antigravity-docker-update.sh
-
-# Pull specific Docker tag
-./docker/antigravity-docker-update.sh --tag v4.1.7
-
-# Pull and restart existing container
+```bash
 ./docker/antigravity-docker-update.sh --restart-container --container-name antigravity-manager
 ```
 
-## 🔄 How It Works
+## Language Support (51)
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  1. Version Check    │ Read installed version from app     │
-├─────────────────────────────────────────────────────────────┤
-│  2. GitHub API       │ Fetch latest release information    │
-├─────────────────────────────────────────────────────────────┤
-│  3. Backup           │ Create backup of current version    │
-├─────────────────────────────────────────────────────────────┤
-│  4. Download         │ Download appropriate package         │
-├─────────────────────────────────────────────────────────────┤
-│  5. Verify           │ Check hash and code signature       │
-├─────────────────────────────────────────────────────────────┤
-│  6. Install          │ Install to appropriate location     │
-├─────────────────────────────────────────────────────────────┤
-│  7. Cleanup          │ Remove temp files, quarantine flags │
-└─────────────────────────────────────────────────────────────┘
-```
+Supported language codes:
 
-## 📁 Project Structure
+`en, tr, de, fr, es, it, pt, ru, zh, zh-TW, ja, ko, ar, nl, pl, sv, no, da, fi, uk, cs, hi, el, he, th, vi, id, ms, hu, ro, bg, hr, sr, sk, sl, lt, lv, et, ca, eu, gl, is, fa, sw, af, fil, bn, ta, ur, mi, cy`
 
-```
-AntigravityUpdater/
-├── Antigravity Updater.app/    # macOS application bundle
-├── antigravity-update.sh       # macOS updater script (v1.2.0)
-├── locales/                    # macOS language files (51)
-│   ├── en.sh
-│   ├── tr.sh
-│   └── ...
-├── windows/                    # Windows version
-│   ├── antigravity-update.ps1  # Windows PowerShell script (v1.2.0)
-│   ├── AntigravityUpdater.bat  # Batch launcher
-│   ├── installer.iss           # Inno Setup installer script
-│   ├── locales/                # Windows language files (51)
-│   │   ├── en.ps1
-│   │   ├── tr.ps1
-│   │   └── ...
-│   └── resources/
-├── linux/                      # Linux version
-│   ├── antigravity-update.sh   # Linux updater script
-│   └── README.md
-├── docker/                     # Docker updater
-│   ├── antigravity-docker-update.sh
-│   └── README.md
-├── releases/                   # Release packages
-├── CHANGELOG.md
-├── README.md
-└── LICENSE
-```
+Language preference files:
 
-## 📋 Requirements
+- macOS: `~/.antigravity_updater_lang`
+- Windows: `%APPDATA%\antigravity_updater_lang.txt`
+- Linux: `~/.antigravity_updater_lang_linux`
+- Docker updater: `~/.antigravity_updater_lang_docker`
 
-### macOS
-- macOS 10.15 (Catalina) or later
-- Apple Silicon (M1/M2/M3) or Intel processor
-- Internet connection
-- `/Applications` write permission
+## Log Files
 
-### Windows
-- Windows 10 or Windows 11 (64-bit)
-- PowerShell 5.1 or later (included with Windows)
-- Internet connection
-- Works on Bootcamp Windows installations
+- macOS: `~/Library/Application Support/AntigravityUpdater/updater.log`
+- Windows: `%APPDATA%\AntigravityUpdater\updater.log`
+- Linux: `$XDG_STATE_HOME/AntigravityUpdater/updater.log` (fallback: `~/.local/state/AntigravityUpdater/updater.log`)
+- Docker updater: `$XDG_STATE_HOME/AntigravityUpdater/docker-updater.log` (fallback: `~/.local/state/AntigravityUpdater/docker-updater.log`)
 
-### Linux
-- Linux distribution with Bash
-- `curl` and `python3`
-- For package install:
-  - `.deb`: `apt-get`/`dpkg`
-  - `.rpm`: `dnf`, `yum`, `zypper`, or `rpm`
-- Internet connection
+## Troubleshooting
 
-### Docker Updater
-- Docker CLI
-- `curl` and `python3`
-- Internet connection to GitHub API and Docker registry
+### GitHub API rate limit
 
-## 📝 Log Files
+Unauthenticated GitHub API requests are limited (commonly 60 requests/hour per IP).
+Wait and retry later if rate-limited.
 
-| Platform | Location |
-|----------|----------|
-| **macOS** | `~/Library/Application Support/AntigravityUpdater/updater.log` |
-| **Windows** | `%APPDATA%\AntigravityUpdater\updater.log` |
-| **Linux** | `$XDG_STATE_HOME/AntigravityUpdater/updater.log` (fallback: `~/.local/state/AntigravityUpdater/updater.log`) |
-| **Docker Updater** | `$XDG_STATE_HOME/AntigravityUpdater/docker-updater.log` (fallback: `~/.local/state/AntigravityUpdater/docker-updater.log`) |
+### Linux install requires privileges
 
-## 🔧 Troubleshooting
+Use a user with `sudo` capability for `.deb`/`.rpm` installation.
 
-### macOS: "App is damaged and can't be opened"
-```bash
-xattr -cr /path/to/Antigravity\ Updater.app
-```
+### Linux package manager not found
 
-### macOS: Permission Denied
-```bash
-chmod +x antigravity-update.sh
-```
-
-### Windows: PowerShell Execution Policy
-```powershell
-powershell -ExecutionPolicy Bypass -File antigravity-update.ps1
-```
-
-### Linux: Permission Denied
-```bash
-chmod +x ./linux/antigravity-update.sh
-```
-
-### Linux: No package manager found
 Use AppImage mode:
+
 ```bash
 ./linux/antigravity-update.sh --format appimage
 ```
 
-### Docker: Container is managed by docker compose
-Use compose update in your compose directory:
+### Docker container is compose-managed
+
+`--restart-container` is intended for `docker run` containers.
+For compose deployments, run this in your compose directory:
+
 ```bash
-docker compose pull && docker compose up -d
+docker compose pull
+docker compose up -d
 ```
 
-### GitHub API Rate Limit
-Wait a few minutes and try again. GitHub limits unauthenticated requests to 60/hour.
+### Windows execution policy blocks script
 
-### Rollback Not Working
-Ensure you have a backup available. Backups are created automatically before each update unless `--no-backup` is used.
+```powershell
+powershell -ExecutionPolicy Bypass -File .\windows\antigravity-update.ps1
+```
 
----
+### macOS permission issue
 
-## 📜 Changelog
+```bash
+chmod +x antigravity-update.sh
+```
 
-### [1.4.0] - 2026-02-06 - Docker Updater
+## Security Notes
 
-#### Added
-- **Docker updater script** at `docker/antigravity-docker-update.sh`
-- Docker-specific docs at `docker/README.md`
-- `--restart-container` flow for docker-run based containers
+Current updaters include hardened locale loading and safer temp/log handling.
+Security-related details are tracked in `CHANGELOG.md`.
 
-#### Changed
-- Updated `README.md` with Docker install/usage/requirements/log paths/troubleshooting
-- Added 51-language support to Linux and Docker updater flows (`--lang`, `--reset-lang`)
+## Repository Layout
 
-### [1.3.0] - 2026-02-06 - Linux Support
+```text
+AntigravityUpdater/
+├── antigravity-update.sh                # macOS updater
+├── locales/                             # Shared locale files (.sh)
+├── windows/
+│   ├── antigravity-update.ps1           # Windows updater
+│   ├── AntigravityUpdater.bat           # Windows launcher
+│   └── locales/                         # Windows locale files (.ps1)
+├── linux/
+│   └── antigravity-update.sh            # Linux updater
+├── docker/
+│   └── antigravity-docker-update.sh     # Docker updater
+├── CHANGELOG.md
+└── README.md
+```
 
-#### Added
-- **Linux updater script** at `linux/antigravity-update.sh`
-- Automatic Linux package selection based on distro/tooling:
-  - `.deb` for Debian/Ubuntu based systems
-  - `.rpm` for Fedora/RHEL/openSUSE based systems
-  - `.AppImage` fallback for generic Linux environments
-- Linux-specific documentation at `linux/README.md`
+## Contributing
 
-### [1.2.0] - 2026-01-30 - Security Enhanced
+- Open an issue or PR for bug fixes and improvements.
+- For localization updates, edit the relevant locale files and keep message keys consistent.
 
-#### 🔒 Security Enhancements
-- **Path Traversal Protection**: Locale files validated to prevent directory traversal attacks
-- **Language Code Validation**: Regex-based validation (only `xx` or `xx-XX` format accepted)
-- **SHA256 Hash Verification**: Support for verifying downloaded file integrity
-- **Code Signature Check**:
-  - macOS: `codesign --verify --deep --strict`
-  - Windows: Authenticode signature validation
-- **Secure Temp Directory**: Random suffix added to temp path
-- **Comprehensive Logging**: Full operation logging with automatic rotation (max 1MB)
+## License
 
-#### 🆕 New Features
-| Feature | macOS | Windows |
-|---------|-------|---------|
-| Automatic Backup | ✅ | ✅ |
-| Rollback | `--rollback` | `-Rollback` |
-| Check-Only | `--check-only` | `-CheckOnly` |
-| Silent Mode | `--silent` | `-Silent` |
-| Changelog | `--changelog` | `-ShowChangelog` |
-| No Backup | `--no-backup` | `-NoBackup` |
-| Proxy Support | `--proxy` | `-ProxyUrl` |
-| Help | `--help` | `-Help` |
-
-#### 🔧 Improvements
-- More precise process termination (exact name matching)
-- Better User-Agent header for GitHub API requests
-- Enhanced error handling and user feedback
-
-### [1.1.0] - 2026-01-30 - Windows Support
-
-#### Added
-- **Full Windows 10/11 64-bit support**
-  - PowerShell-based updater script
-  - Batch file launcher for easy execution
-  - Inno Setup installer script
-  - Works on Bootcamp Windows installations
-- Windows-specific locale files (51 languages)
-- Separate `windows/` directory structure
-
-### [1.0.0] - 2026-01-15 - Initial Release
-
-#### Added
-- macOS application bundle (.app)
-- 51 language support with automatic detection
-- Universal Binary support (Apple Silicon + Intel)
-- One-click update functionality
-- Persistent language preferences
-- Automatic quarantine flag removal
-- GitHub API integration
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! To add a new language:
-
-### macOS
-1. Copy `locales/en.sh` to `locales/[lang-code].sh`
-2. Translate all `MSG_*` variables
-3. Update `LANG_CODES` and `LANG_NAMES` arrays in main script
-
-### Windows
-1. Copy `windows/locales/en.ps1` to `windows/locales/[lang-code].ps1`
-2. Translate all `$script:MSG_*` variables
-
-Then submit a pull request.
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- [Antigravity Tools](https://github.com/lbjlaq/Antigravity-Manager) - The application this updater supports
-- All contributors who helped with translations
-
-### Special Thanks
-- [@nvtptest](https://github.com/nvtptest) - Fixed Windows EXE detection issue ([#1](https://github.com/ercanatay/AntigravityUpdater/pull/1))
-
-## 👤 Author
-
-**Ercan ATAY**
-- GitHub: [@ercanatay](https://github.com/ercanatay)
-- Website: [ercanatay.com](https://www.ercanatay.com/en/)
-
----
-
-<p align="center">
-Made with ❤️ for the Antigravity Tools community
-</p>
+MIT. See `LICENSE`.

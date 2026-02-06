@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-02-06
+
 ### Added
 - Linux updater now supports the shared 51-language locale set with language selection options:
   - `--lang`
@@ -16,7 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `--reset-lang`
 
 ### Changed
+- Rewrote `README.md` for clearer onboarding, platform guidance, and command reference
 - Updated Linux and Docker README files with language option usage examples
+- Bumped updater/application metadata and badges to `1.4.2`
 
 ## [1.4.1] - 2026-02-06
 

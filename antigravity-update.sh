@@ -28,9 +28,11 @@ APP_PATH="/Applications/Antigravity Tools.app"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOCALES_DIR="$SCRIPT_DIR/locales"
 
-# If running from .app bundle, adjust path
+# If running from .app bundle, look for locales alongside the .app bundle
 if [[ "$SCRIPT_DIR" == *".app/Contents/Resources"* ]]; then
-    LOCALES_DIR="$SCRIPT_DIR/locales"
+    APP_BUNDLE_DIR="${SCRIPT_DIR%%.app/*}"
+    APP_BUNDLE_DIR="$(dirname "${APP_BUNDLE_DIR}.app")"
+    LOCALES_DIR="$APP_BUNDLE_DIR/locales"
 fi
 
 # Logging and backup directories
@@ -40,6 +42,12 @@ BACKUP_DIR="$LOG_DIR/backups"
 
 # Secure temp directory with random suffix
 TEMP_DIR=$(mktemp -d -t "AntigravityUpdater.XXXXXXXX")
+
+# Cleanup on exit (normal or unexpected)
+cleanup() {
+    rm -rf "$TEMP_DIR"
+}
+trap cleanup EXIT
 
 # Language preference file
 LANG_PREF_FILE="$HOME/.antigravity_updater_lang"
@@ -509,6 +517,10 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --proxy)
+            if [[ $# -lt 2 ]]; then
+                echo -e "${RED}Error: --proxy requires a URL value${NC}"
+                exit 1
+            fi
             PROXY_URL="$2"
             shift 2
             ;;
@@ -556,7 +568,7 @@ if [[ "$SILENT" != true ]]; then
 
     echo -e "${CYAN}"
     echo "╔══════════════════════════════════════════════════════════╗"
-    echo "║         $MSG_TITLE v$UPDATER_VERSION"
+    echo "║         $MSG_TITLE v$UPDATER_VERSION              ║"
     echo "╚══════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
 
@@ -591,7 +603,6 @@ if ! command -v python3 >/dev/null 2>&1; then
         echo -e "${RED}Error: python3 is required for update checks.${NC}"
     fi
     write_log "ERROR" "python3 not found"
-    rm -rf "$TEMP_DIR"
     exit 1
 fi
 
@@ -614,7 +625,6 @@ if [[ -z "$RELEASE_INFO" ]] || [[ "$RELEASE_INFO" == *"rate limit"* ]]; then
         echo -e "${RED}$MSG_API_ERROR${NC}"
     fi
     write_log "ERROR" "GitHub API error"
-    rm -rf "$TEMP_DIR"
     exit 1
 fi
 
@@ -641,7 +651,6 @@ if [[ "$CURRENT_VERSION" == "$LATEST_VERSION" ]]; then
         echo -e "${GREEN}$MSG_ALREADY_LATEST${NC}"
     fi
     write_log "INFO" "Already on latest version"
-    rm -rf "$TEMP_DIR"
     exit 0
 fi
 
@@ -650,7 +659,6 @@ if [[ "$CHECK_ONLY" == true ]]; then
     echo ""
     echo -e "${YELLOW}Update available: $CURRENT_VERSION -> $LATEST_VERSION${NC}"
     write_log "INFO" "Check-only mode: update available"
-    rm -rf "$TEMP_DIR"
     exit 0
 fi
 
@@ -712,7 +720,6 @@ if ! verify_download "$DMG_PATH"; then
     if [[ "$SILENT" != true ]]; then
         echo -e "${RED}File verification failed${NC}"
     fi
-    rm -rf "$TEMP_DIR"
     exit 1
 fi
 
@@ -733,7 +740,6 @@ if [[ -z "$MOUNT_POINT" ]] || [[ ! -d "$MOUNT_POINT" ]]; then
         echo -e "${RED}$MSG_MOUNT_FAILED${NC}"
     fi
     write_log "ERROR" "Failed to mount DMG"
-    rm -rf "$TEMP_DIR"
     exit 1
 fi
 
@@ -772,7 +778,6 @@ if [[ -z "$SOURCE_APP" ]] || [[ ! -d "$SOURCE_APP" ]]; then
     fi
     write_log "ERROR" "Application not found in DMG"
     hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
-    rm -rf "$TEMP_DIR"
     exit 1
 fi
 
@@ -814,14 +819,11 @@ if [[ "$SILENT" != true ]]; then
 fi
 hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
 
-# Cleanup
-rm -rf "$TEMP_DIR"
-
 # Success message
 if [[ "$SILENT" != true ]]; then
     echo ""
     echo -e "${GREEN}╔══════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║         $MSG_UPDATE_SUCCESS${NC}"
+    echo -e "${GREEN}║         $MSG_UPDATE_SUCCESS                    ║${NC}"
     echo -e "${GREEN}╚══════════════════════════════════════════════════════════╝${NC}"
     echo ""
     echo -e "   $MSG_OLD_VERSION: ${YELLOW}$CURRENT_VERSION${NC}"

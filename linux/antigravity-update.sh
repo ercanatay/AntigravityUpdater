@@ -479,8 +479,8 @@ download_asset() {
 
 stop_running_app() {
     print_msg "$MSG_CLOSING_APP"
-    pkill -f "Antigravity Tools" 2>/dev/null || true
-    pkill -f "antigravity-tools" 2>/dev/null || true
+    pkill -x "Antigravity Tools" 2>/dev/null || true
+    pkill -x "antigravity-tools" 2>/dev/null || true
     sleep 1
 }
 

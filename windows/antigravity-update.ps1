@@ -492,10 +492,10 @@ function Get-InstalledVersion {
 
 function Stop-AntigravityApp {
     # More precise process matching
-    $processes = Get-Process | Where-Object {
+    $processes = Get-Process -ErrorAction SilentlyContinue | Where-Object {
         $_.ProcessName -eq "Antigravity Tools" -or
         $_.ProcessName -eq "AntigravityTools"
-    } -ErrorAction SilentlyContinue
+    }
 
     if ($processes) {
         Write-Log "Stopping processes: $($processes.ProcessName -join ', ')" "INFO"

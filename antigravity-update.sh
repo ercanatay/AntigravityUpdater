@@ -6,12 +6,6 @@
 
 set -e
 
-# Check for required tools
-if ! command -v python3 >/dev/null 2>&1; then
-    echo "Error: python3 is required but not found."
-    exit 1
-fi
-
 # Version
 UPDATER_VERSION="1.2.0"
 
@@ -588,6 +582,17 @@ else
         echo -e "   $MSG_CURRENT: ${YELLOW}$CURRENT_VERSION${NC}"
     fi
     write_log "INFO" "Application not installed"
+fi
+
+# Python is required for JSON parsing below.
+# Kept here so --help and --rollback can still run without python3.
+if ! command -v python3 >/dev/null 2>&1; then
+    if [[ "$SILENT" != true ]]; then
+        echo -e "${RED}Error: python3 is required for update checks.${NC}"
+    fi
+    write_log "ERROR" "python3 not found"
+    rm -rf "$TEMP_DIR"
+    exit 1
 fi
 
 # Get latest version from GitHub

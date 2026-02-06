@@ -3,7 +3,7 @@
 A lightweight, multi-language, cross-platform application that automatically updates [Antigravity Tools](https://github.com/lbjlaq/Antigravity-Manager) to the latest version with a single click.
 
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue)
-![Version](https://img.shields.io/badge/version-1.3.0-green)
+![Version](https://img.shields.io/badge/version-1.4.0-green)
 ![Languages](https://img.shields.io/badge/languages-51-orange)
 ![License](https://img.shields.io/badge/license-MIT-brightgreen)
 ![Security](https://img.shields.io/badge/security-enhanced-purple)
@@ -18,6 +18,7 @@ A lightweight, multi-language, cross-platform application that automatically upd
 - **Windows 10/11 (64-bit)**: Full support including Bootcamp installations
 - **Linux (x86_64 + aarch64)**: Auto-selects `.deb`, `.rpm`, or `.AppImage` assets
 - **Linux UX**: English-first console output
+- **Docker Deployment Updater**: Pull latest container image and optionally restart existing container
 
 ### 🔒 Security Features (v1.2.0)
 - **Path Traversal Protection**: Locale files validated to prevent directory traversal attacks
@@ -119,6 +120,15 @@ chmod +x antigravity-update.sh
 ./antigravity-update.sh --format appimage
 ```
 
+### Docker
+
+```bash
+git clone https://github.com/ercanatay/AntigravityUpdater.git
+cd AntigravityUpdater
+chmod +x docker/antigravity-docker-update.sh
+./docker/antigravity-docker-update.sh --check-only
+```
+
 ## 💻 Usage
 
 ### Basic Usage
@@ -211,6 +221,21 @@ On first launch, select your preferred language. The updater remembers your choi
 ./linux/antigravity-update.sh --format auto
 ```
 
+#### Docker
+```bash
+# Check only
+./docker/antigravity-docker-update.sh --check-only
+
+# Pull latest image based on latest Antigravity-Manager release
+./docker/antigravity-docker-update.sh
+
+# Pull specific Docker tag
+./docker/antigravity-docker-update.sh --tag v4.1.7
+
+# Pull and restart existing container
+./docker/antigravity-docker-update.sh --restart-container --container-name antigravity-manager
+```
+
 ## 🔄 How It Works
 
 ```
@@ -253,6 +278,9 @@ AntigravityUpdater/
 ├── linux/                      # Linux version
 │   ├── antigravity-update.sh   # Linux updater script
 │   └── README.md
+├── docker/                     # Docker updater
+│   ├── antigravity-docker-update.sh
+│   └── README.md
 ├── releases/                   # Release packages
 ├── CHANGELOG.md
 ├── README.md
@@ -281,6 +309,11 @@ AntigravityUpdater/
   - `.rpm`: `dnf`, `yum`, `zypper`, or `rpm`
 - Internet connection
 
+### Docker Updater
+- Docker CLI
+- `curl` and `python3`
+- Internet connection to GitHub API and Docker registry
+
 ## 📝 Log Files
 
 | Platform | Location |
@@ -288,6 +321,7 @@ AntigravityUpdater/
 | **macOS** | `~/Library/Application Support/AntigravityUpdater/updater.log` |
 | **Windows** | `%APPDATA%\AntigravityUpdater\updater.log` |
 | **Linux** | `$XDG_STATE_HOME/AntigravityUpdater/updater.log` (fallback: `~/.local/state/AntigravityUpdater/updater.log`) |
+| **Docker Updater** | `$XDG_STATE_HOME/AntigravityUpdater/docker-updater.log` (fallback: `~/.local/state/AntigravityUpdater/docker-updater.log`) |
 
 ## 🔧 Troubleshooting
 
@@ -317,6 +351,12 @@ Use AppImage mode:
 ./linux/antigravity-update.sh --format appimage
 ```
 
+### Docker: Container is managed by docker compose
+Use compose update in your compose directory:
+```bash
+docker compose pull && docker compose up -d
+```
+
 ### GitHub API Rate Limit
 Wait a few minutes and try again. GitHub limits unauthenticated requests to 60/hour.
 
@@ -326,6 +366,16 @@ Ensure you have a backup available. Backups are created automatically before eac
 ---
 
 ## 📜 Changelog
+
+### [1.4.0] - 2026-02-06 - Docker Updater
+
+#### Added
+- **Docker updater script** at `docker/antigravity-docker-update.sh`
+- Docker-specific docs at `docker/README.md`
+- `--restart-container` flow for docker-run based containers
+
+#### Changed
+- Updated `README.md` with Docker install/usage/requirements/log paths/troubleshooting
 
 ### [1.3.0] - 2026-02-06 - Linux Support
 

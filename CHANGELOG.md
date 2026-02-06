@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-02-06
+
+### Added
+- **Docker Updater**: New script at `docker/antigravity-docker-update.sh`
+- Docker updater options:
+  - `--check-only` for update checks
+  - `--tag` to target a specific Docker image tag
+  - `--restart-container` to recreate docker-run based containers with the updated image
+- Docker updater documentation at `docker/README.md`
+
+### Changed
+- Updated `README.md` with Docker updater installation, usage, requirements, logs, and troubleshooting
+
 ## [1.3.0] - 2026-02-06
 
 ### Added

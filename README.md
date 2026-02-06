@@ -2,8 +2,8 @@
 
 A lightweight, multi-language, cross-platform application that automatically updates [Antigravity Tools](https://github.com/lbjlaq/Antigravity-Manager) to the latest version with a single click.
 
-![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-1.2.2-green)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue)
+![Version](https://img.shields.io/badge/version-1.3.0-green)
 ![Languages](https://img.shields.io/badge/languages-51-orange)
 ![License](https://img.shields.io/badge/license-MIT-brightgreen)
 ![Security](https://img.shields.io/badge/security-enhanced-purple)
@@ -12,10 +12,12 @@ A lightweight, multi-language, cross-platform application that automatically upd
 
 ### Core Features
 - **One-Click Update**: Automatically downloads and installs the latest version
-- **Multi-Language Support**: 51 languages with automatic system language detection
-- **Cross-Platform**: Supports macOS and Windows with feature parity
+- **Multi-Language Support**: 51 languages with automatic system language detection (macOS + Windows)
+- **Cross-Platform**: Supports macOS, Windows, and Linux
 - **Universal Binary (macOS)**: Supports both Apple Silicon (M1/M2/M3) and Intel Macs
 - **Windows 10/11 (64-bit)**: Full support including Bootcamp installations
+- **Linux (x86_64 + aarch64)**: Auto-selects `.deb`, `.rpm`, or `.AppImage` assets
+- **Linux UX**: English-first console output
 
 ### 🔒 Security Features (v1.2.0)
 - **Path Traversal Protection**: Locale files validated to prevent directory traversal attacks
@@ -95,6 +97,28 @@ cd AntigravityUpdater/windows
 .\AntigravityUpdater.bat
 ```
 
+### Linux
+
+#### Option 1: Run Script Directly (Recommended)
+```bash
+git clone https://github.com/ercanatay/AntigravityUpdater.git
+cd AntigravityUpdater/linux
+chmod +x antigravity-update.sh
+./antigravity-update.sh
+```
+
+#### Option 2: Force Package Type
+```bash
+# Force .deb
+./antigravity-update.sh --format deb
+
+# Force .rpm
+./antigravity-update.sh --format rpm
+
+# Force AppImage
+./antigravity-update.sh --format appimage
+```
+
 ## 💻 Usage
 
 ### Basic Usage
@@ -166,6 +190,27 @@ On first launch, select your preferred language. The updater remembers your choi
 .\antigravity-update.ps1 -ProxyUrl "http://proxy.company.com:8080"
 ```
 
+#### Linux
+```bash
+# Standard update
+./linux/antigravity-update.sh
+
+# Check for updates only (no install)
+./linux/antigravity-update.sh --check-only
+
+# Show changelog before update
+./linux/antigravity-update.sh --changelog
+
+# Silent mode
+./linux/antigravity-update.sh --silent
+
+# Use with corporate proxy
+./linux/antigravity-update.sh --proxy "http://proxy.company.com:8080"
+
+# Select package type manually
+./linux/antigravity-update.sh --format auto
+```
+
 ## 🔄 How It Works
 
 ```
@@ -205,6 +250,9 @@ AntigravityUpdater/
 │   │   ├── tr.ps1
 │   │   └── ...
 │   └── resources/
+├── linux/                      # Linux version
+│   ├── antigravity-update.sh   # Linux updater script
+│   └── README.md
 ├── releases/                   # Release packages
 ├── CHANGELOG.md
 ├── README.md
@@ -225,12 +273,21 @@ AntigravityUpdater/
 - Internet connection
 - Works on Bootcamp Windows installations
 
+### Linux
+- Linux distribution with Bash
+- `curl` and `python3`
+- For package install:
+  - `.deb`: `apt-get`/`dpkg`
+  - `.rpm`: `dnf`, `yum`, `zypper`, or `rpm`
+- Internet connection
+
 ## 📝 Log Files
 
 | Platform | Location |
 |----------|----------|
 | **macOS** | `~/Library/Application Support/AntigravityUpdater/updater.log` |
 | **Windows** | `%APPDATA%\AntigravityUpdater\updater.log` |
+| **Linux** | `$XDG_STATE_HOME/AntigravityUpdater/updater.log` (fallback: `~/.local/state/AntigravityUpdater/updater.log`) |
 
 ## 🔧 Troubleshooting
 
@@ -249,6 +306,17 @@ chmod +x antigravity-update.sh
 powershell -ExecutionPolicy Bypass -File antigravity-update.ps1
 ```
 
+### Linux: Permission Denied
+```bash
+chmod +x ./linux/antigravity-update.sh
+```
+
+### Linux: No package manager found
+Use AppImage mode:
+```bash
+./linux/antigravity-update.sh --format appimage
+```
+
 ### GitHub API Rate Limit
 Wait a few minutes and try again. GitHub limits unauthenticated requests to 60/hour.
 
@@ -258,6 +326,16 @@ Ensure you have a backup available. Backups are created automatically before eac
 ---
 
 ## 📜 Changelog
+
+### [1.3.0] - 2026-02-06 - Linux Support
+
+#### Added
+- **Linux updater script** at `linux/antigravity-update.sh`
+- Automatic Linux package selection based on distro/tooling:
+  - `.deb` for Debian/Ubuntu based systems
+  - `.rpm` for Fedora/RHEL/openSUSE based systems
+  - `.AppImage` fallback for generic Linux environments
+- Linux-specific documentation at `linux/README.md`
 
 ### [1.2.0] - 2026-01-30 - Security Enhanced
 

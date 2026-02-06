@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] - 2026-02-06
+
+### Fixed
+- **macOS updater security hardening**:
+  - Removed unsafe `eval` execution in network calls
+  - Kept `--help` and `--rollback` usable by deferring python dependency enforcement to update-check stage
+- **Launcher hardening**:
+  - Resolved absolute script path before launch
+  - Added missing script existence check and safer AppleScript invocation
+- **DMG mount parsing**: Improved mount point extraction for volume names with spaces
+- **Windows process handling**: Corrected `Get-Process` error handling placement in `Stop-AntigravityApp`
+
+### Changed
+- Synced bundled macOS app resource script with root `antigravity-update.sh`
+- Added missing backup/integrity/signature message keys across macOS and Windows locale files
+- Bumped application metadata and installer metadata to `1.4.1`
+
 ## [1.4.0] - 2026-02-06
 
 ### Added

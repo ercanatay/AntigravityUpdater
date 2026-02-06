@@ -618,8 +618,9 @@ if [[ -z "$RELEASE_INFO" ]] || [[ "$RELEASE_INFO" == *"rate limit"* ]]; then
     exit 1
 fi
 
-LATEST_VERSION=$(echo "$RELEASE_INFO" | python3 -c "import sys, json; print(json.load(sys.stdin).get('tag_name', '').lstrip('v'))" 2>/dev/null || echo "")
-RELEASE_BODY=$(echo "$RELEASE_INFO" | python3 -c "import sys, json; print(json.load(sys.stdin).get('body', ''))" 2>/dev/null || echo "")
+# Optimization: Combine JSON parsing into a single python process to reduce startup overhead.
+# Uses shlex.quote to safely escape strings for eval.
+eval "$(echo "$RELEASE_INFO" | python3 -c "import sys, json, shlex; data=json.load(sys.stdin); print(f'LATEST_VERSION={shlex.quote(data.get('tag_name', '').lstrip('v'))}'); print(f'RELEASE_BODY={shlex.quote(data.get('body', ''))}')" 2>/dev/null || echo "")"
 
 if [[ "$SILENT" != true ]]; then
     echo -e "   $MSG_LATEST:    ${GREEN}$LATEST_VERSION${NC}"

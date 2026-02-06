@@ -632,6 +632,14 @@ fi
 # Uses shlex.quote to safely escape strings for eval.
 eval "$(echo "$RELEASE_INFO" | python3 -c "import sys, json, shlex; data=json.load(sys.stdin); print(f'LATEST_VERSION={shlex.quote(data.get('tag_name', '').lstrip('v'))}'); print(f'RELEASE_BODY={shlex.quote(data.get('body', ''))}')" 2>/dev/null || echo "")"
 
+if [[ -z "$LATEST_VERSION" ]]; then
+    write_log "ERROR" "Could not parse latest version from GitHub response"
+    if [[ "$SILENT" != true ]]; then
+        echo -e "${RED}Error: Could not parse latest version.${NC}"
+    fi
+    exit 1
+fi
+
 if [[ "$SILENT" != true ]]; then
     echo -e "   $MSG_LATEST:    ${GREEN}$LATEST_VERSION${NC}"
     echo -e "   $MSG_ARCH: ${CYAN}$ARCH_NAME ($ARCH)${NC}"
@@ -748,6 +756,40 @@ if [[ "$SILENT" != true ]]; then
     echo -e "${GREEN}$MSG_MOUNTED: $MOUNT_POINT${NC}"
 fi
 
+SOURCE_APP="$MOUNT_POINT/$APP_NAME.app"
+
+if [[ ! -d "$SOURCE_APP" ]]; then
+    SOURCE_APP=$(find "$MOUNT_POINT" -maxdepth 1 -name "*.app" | head -1)
+fi
+
+if [[ -z "$SOURCE_APP" ]] || [[ ! -d "$SOURCE_APP" ]]; then
+    if [[ "$SILENT" != true ]]; then
+        echo -e "${RED}$MSG_APP_NOT_FOUND${NC}"
+    fi
+    write_log "ERROR" "Application not found in DMG"
+    hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
+    exit 1
+fi
+
+# Verify code signature
+if [[ "$SILENT" != true ]]; then
+    echo -e "${BLUE}$MSG_CODESIGN_CHECK${NC}"
+fi
+
+if verify_codesign "$SOURCE_APP"; then
+    if [[ "$SILENT" != true ]]; then
+        echo -e "${GREEN}$MSG_CODESIGN_OK${NC}"
+    fi
+    write_log "INFO" "Code signature valid"
+else
+    if [[ "$SILENT" != true ]]; then
+        echo -e "${RED}Code signature verification failed!${NC}"
+    fi
+    write_log "ERROR" "Code signature verification failed"
+    hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
+    exit 1
+fi
+
 # Close running application
 if [[ "$SILENT" != true ]]; then
     echo -e "${BLUE}$MSG_CLOSING_APP${NC}"
@@ -767,43 +809,11 @@ if [[ "$SILENT" != true ]]; then
     echo -e "${BLUE}$MSG_COPYING_NEW${NC}"
 fi
 
-SOURCE_APP="$MOUNT_POINT/$APP_NAME.app"
-
-if [[ ! -d "$SOURCE_APP" ]]; then
-    SOURCE_APP=$(find "$MOUNT_POINT" -maxdepth 1 -name "*.app" | head -1)
-fi
-
-if [[ -z "$SOURCE_APP" ]] || [[ ! -d "$SOURCE_APP" ]]; then
-    if [[ "$SILENT" != true ]]; then
-        echo -e "${RED}$MSG_APP_NOT_FOUND${NC}"
-    fi
-    write_log "ERROR" "Application not found in DMG"
-    hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
-    exit 1
-fi
-
 cp -R "$SOURCE_APP" "$APP_PATH"
 if [[ "$SILENT" != true ]]; then
     echo -e "${GREEN}$MSG_COPIED${NC}"
 fi
 write_log "INFO" "Application installed to: $APP_PATH"
-
-# Verify code signature
-if [[ "$SILENT" != true ]]; then
-    echo -e "${BLUE}$MSG_CODESIGN_CHECK${NC}"
-fi
-
-if verify_codesign "$APP_PATH"; then
-    if [[ "$SILENT" != true ]]; then
-        echo -e "${GREEN}$MSG_CODESIGN_OK${NC}"
-    fi
-    write_log "INFO" "Code signature valid"
-else
-    if [[ "$SILENT" != true ]]; then
-        echo -e "${YELLOW}$MSG_CODESIGN_WARN${NC}"
-    fi
-    write_log "WARN" "Code signature not verified"
-fi
 
 # Remove quarantine
 if [[ "$SILENT" != true ]]; then

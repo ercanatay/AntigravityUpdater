@@ -6,6 +6,12 @@
 
 set -e
 
+# Check for required tools
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "Error: python3 is required but not found."
+    exit 1
+fi
+
 # Version
 UPDATER_VERSION="1.2.0"
 
@@ -590,13 +596,13 @@ if [[ "$SILENT" != true ]]; then
 fi
 
 # Build curl command with optional proxy
-CURL_OPTS="-s -A \"AntigravityUpdater/$UPDATER_VERSION\""
+declare -a CURL_OPTS=("-s" "-A" "AntigravityUpdater/$UPDATER_VERSION")
 if [[ -n "$PROXY_URL" ]]; then
-    CURL_OPTS="$CURL_OPTS --proxy \"$PROXY_URL\""
+    CURL_OPTS+=("--proxy" "$PROXY_URL")
     write_log "INFO" "Using proxy: $PROXY_URL"
 fi
 
-RELEASE_INFO=$(eval curl $CURL_OPTS "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest")
+RELEASE_INFO=$(curl "${CURL_OPTS[@]}" "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest")
 
 if [[ -z "$RELEASE_INFO" ]] || [[ "$RELEASE_INFO" == *"rate limit"* ]]; then
     if [[ "$SILENT" != true ]]; then
@@ -607,7 +613,7 @@ if [[ -z "$RELEASE_INFO" ]] || [[ "$RELEASE_INFO" == *"rate limit"* ]]; then
     exit 1
 fi
 
-LATEST_VERSION=$(echo "$RELEASE_INFO" | grep '"tag_name"' | sed -E 's/.*"v?([^"]+)".*/\1/')
+LATEST_VERSION=$(echo "$RELEASE_INFO" | python3 -c "import sys, json; print(json.load(sys.stdin).get('tag_name', '').lstrip('v'))" 2>/dev/null || echo "")
 RELEASE_BODY=$(echo "$RELEASE_INFO" | python3 -c "import sys, json; print(json.load(sys.stdin).get('body', ''))" 2>/dev/null || echo "")
 
 if [[ "$SILENT" != true ]]; then
@@ -678,12 +684,12 @@ fi
 write_log "INFO" "Download URL: $DOWNLOAD_URL"
 
 # Build download command with optional proxy
-DOWNLOAD_OPTS="-L --progress-bar -o \"$DMG_PATH\""
+declare -a DOWNLOAD_OPTS=("-L" "--progress-bar" "-o" "$DMG_PATH")
 if [[ -n "$PROXY_URL" ]]; then
-    DOWNLOAD_OPTS="$DOWNLOAD_OPTS --proxy \"$PROXY_URL\""
+    DOWNLOAD_OPTS+=("--proxy" "$PROXY_URL")
 fi
 
-if ! eval curl $DOWNLOAD_OPTS "\"$DOWNLOAD_URL\""; then
+if ! curl "${DOWNLOAD_OPTS[@]}" "$DOWNLOAD_URL"; then
     if [[ "$SILENT" != true ]]; then
         echo -e "${RED}$MSG_DOWNLOAD_FAILED${NC}"
     fi

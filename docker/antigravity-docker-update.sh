@@ -13,6 +13,7 @@ DEFAULT_IMAGE_REPO="lbjlaq/antigravity-manager"
 DEFAULT_CONTAINER_NAME="antigravity-manager"
 
 CHECK_ONLY=false
+SHOW_CHANGELOG=false
 SILENT=false
 RESTART_CONTAINER=false
 PROXY_URL=""
@@ -33,6 +34,7 @@ LOG_FILE="$LOG_DIR/docker-updater.log"
 TEMP_DIR="$(mktemp -d -t antigravity-docker-updater.XXXXXXXX)"
 
 LATEST_RELEASE_TAG=""
+LATEST_RELEASE_BODY=""
 TARGET_TAG=""
 TARGET_IMAGE=""
 CURRENT_IMAGE="Not installed"
@@ -89,6 +91,7 @@ Options:
   --lang, -l                   Change language
   --reset-lang                 Reset language preference
   --check-only                 Check for updates only
+  --changelog                  Show release notes before pulling image
   --restart-container          Restart existing container with new image
   --container-name NAME        Container name (default: $DEFAULT_CONTAINER_NAME)
   --image REPO                 Docker image repo (default: $DEFAULT_IMAGE_REPO)
@@ -268,12 +271,25 @@ fetch_latest_release_tag() {
     fi
 
     LATEST_RELEASE_TAG=$(printf '%s' "$release_info" | python3 -c 'import json,sys; j=json.load(sys.stdin); print(j.get("tag_name") or "")' 2>/dev/null || true)
+    LATEST_RELEASE_BODY=$(printf '%s' "$release_info" | python3 -c 'import json,sys; j=json.load(sys.stdin); print(j.get("body") or "")' 2>/dev/null || true)
 
     if [[ -z "$LATEST_RELEASE_TAG" ]]; then
         write_log "ERROR" "Could not parse tag_name from GitHub response"
         echo "ERROR: Could not parse latest release tag from GitHub response." >&2
         exit 1
     fi
+}
+
+show_changelog() {
+    echo ""
+    echo "=== Changelog ($TARGET_TAG) ==="
+
+    if [[ -z "$LATEST_RELEASE_BODY" ]]; then
+        echo "No release notes available."
+        return
+    fi
+
+    printf '%s\n' "$LATEST_RELEASE_BODY"
 }
 
 normalize_target_tag() {
@@ -526,6 +542,9 @@ main() {
             --check-only)
                 CHECK_ONLY=true
                 ;;
+            --changelog)
+                SHOW_CHANGELOG=true
+                ;;
             --restart-container)
                 RESTART_CONTAINER=true
                 ;;
@@ -613,6 +632,10 @@ main() {
     print_msg "$MSG_TITLE Docker Updater v$UPDATER_VERSION"
     print_msg "$LANG_NAME (--lang to change)"
     print_msg "$MSG_LATEST: $TARGET_IMAGE"
+
+    if [[ "$SHOW_CHANGELOG" == true ]]; then
+        show_changelog
+    fi
 
     if [[ "$CHECK_ONLY" == true ]]; then
         run_check_only

@@ -31,6 +31,9 @@ It supports the shared 51-language locale set used across the project.
 # Check only (no pull, no restart)
 ./docker/antigravity-docker-update.sh --check-only
 
+# Show changelog before pull/restart
+./docker/antigravity-docker-update.sh --changelog
+
 # Pull latest image tag based on latest GitHub release
 ./docker/antigravity-docker-update.sh
 

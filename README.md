@@ -35,7 +35,7 @@ This repository does **not** contain Antigravity Tools itself. It provides updat
 | Check-only mode | Yes | Yes | Yes | Yes |
 | Proxy support | Yes | Yes | Yes | Yes |
 | Silent mode | Yes | Yes | Yes | Yes |
-| Changelog display | Yes | Yes | Yes | No |
+| Changelog display | Yes | Yes | Yes | Yes |
 | Backup before update | Yes | Yes | No | No |
 | Rollback | Yes | Yes | No | No |
 | Package-type selection | No | No | Yes | No |
@@ -165,6 +165,7 @@ chmod +x docker/antigravity-docker-update.sh
 --lang, -l                   Change language
 --reset-lang                 Reset language preference
 --check-only                 Check status only
+--changelog                  Show release notes before pull/restart
 --restart-container          Recreate existing container with new image
 --container-name NAME        Container name (default: antigravity-manager)
 --image REPO                 Image repository (default: lbjlaq/antigravity-manager)

@@ -1,6 +1,7 @@
 # Linux Build and Usage
 
 This folder contains the Linux updater script for Antigravity Tools.
+It supports the shared 51-language locale set used across the project.
 
 ## Supported Package Types
 
@@ -30,6 +31,12 @@ chmod +x antigravity-update.sh
 ## Options
 
 ```bash
+# Change language
+./antigravity-update.sh --lang
+
+# Reset saved language preference
+./antigravity-update.sh --reset-lang
+
 # Check for updates only
 ./antigravity-update.sh --check-only
 

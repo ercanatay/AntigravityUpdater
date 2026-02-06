@@ -12,12 +12,12 @@ A lightweight, multi-language, cross-platform application that automatically upd
 
 ### Core Features
 - **One-Click Update**: Automatically downloads and installs the latest version
-- **Multi-Language Support**: 51 languages with automatic system language detection (macOS + Windows)
+- **Multi-Language Support**: 51 languages with automatic system language detection (macOS + Windows + Linux + Docker updater)
 - **Cross-Platform**: Supports macOS, Windows, and Linux
 - **Universal Binary (macOS)**: Supports both Apple Silicon (M1/M2/M3) and Intel Macs
 - **Windows 10/11 (64-bit)**: Full support including Bootcamp installations
 - **Linux (x86_64 + aarch64)**: Auto-selects `.deb`, `.rpm`, or `.AppImage` assets
-- **Linux UX**: English-first console output
+- **Linux UX**: Localized output with shared 51-language locale files
 - **Docker Deployment Updater**: Pull latest container image and optionally restart existing container
 
 ### 🔒 Security Features (v1.2.0)
@@ -205,6 +205,12 @@ On first launch, select your preferred language. The updater remembers your choi
 # Standard update
 ./linux/antigravity-update.sh
 
+# Change language
+./linux/antigravity-update.sh --lang
+
+# Reset language preference
+./linux/antigravity-update.sh --reset-lang
+
 # Check for updates only (no install)
 ./linux/antigravity-update.sh --check-only
 
@@ -223,6 +229,12 @@ On first launch, select your preferred language. The updater remembers your choi
 
 #### Docker
 ```bash
+# Change language
+./docker/antigravity-docker-update.sh --lang
+
+# Reset language preference
+./docker/antigravity-docker-update.sh --reset-lang
+
 # Check only
 ./docker/antigravity-docker-update.sh --check-only
 
@@ -376,6 +388,7 @@ Ensure you have a backup available. Backups are created automatically before eac
 
 #### Changed
 - Updated `README.md` with Docker install/usage/requirements/log paths/troubleshooting
+- Added 51-language support to Linux and Docker updater flows (`--lang`, `--reset-lang`)
 
 ### [1.3.0] - 2026-02-06 - Linux Support
 

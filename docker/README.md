@@ -1,6 +1,7 @@
 # Docker Updater
 
 This directory contains a Docker-focused updater script for Antigravity Manager deployments.
+It supports the shared 51-language locale set used across the project.
 
 ## Script
 
@@ -21,6 +22,12 @@ This directory contains a Docker-focused updater script for Antigravity Manager 
 ## Usage
 
 ```bash
+# Change language
+./docker/antigravity-docker-update.sh --lang
+
+# Reset saved language preference
+./docker/antigravity-docker-update.sh --reset-lang
+
 # Check only (no pull, no restart)
 ./docker/antigravity-docker-update.sh --check-only
 

@@ -270,8 +270,9 @@ fetch_latest_release_tag() {
         exit 1
     fi
 
-    LATEST_RELEASE_TAG=$(printf '%s' "$release_info" | python3 -c 'import json,sys; j=json.load(sys.stdin); print(j.get("tag_name") or "")' 2>/dev/null || true)
-    LATEST_RELEASE_BODY=$(printf '%s' "$release_info" | python3 -c 'import json,sys; j=json.load(sys.stdin); print(j.get("body") or "")' 2>/dev/null || true)
+    # Optimization: Combine JSON parsing into a single python process
+    # Uses shlex.quote to safely escape strings for eval
+    eval "$(printf '%s' "$release_info" | python3 -c "import sys, json, shlex; data=json.load(sys.stdin); print(f'LATEST_RELEASE_TAG={shlex.quote(data.get('tag_name') or '')}'); print(f'LATEST_RELEASE_BODY={shlex.quote(data.get('body') or '')}')" 2>/dev/null || true)"
 
     if [[ -z "$LATEST_RELEASE_TAG" ]]; then
         write_log "ERROR" "Could not parse tag_name from GitHub response"

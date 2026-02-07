@@ -484,6 +484,10 @@ restart_with_new_image() {
         exit 1
     fi
 
+    print_msg "WARNING: Restarting container copies existing environment variables."
+    print_msg "This may override defaults in the new image."
+    write_log "WARN" "Container restart requested - environment variables will be copied"
+
     run_cmd=$(generate_recreate_command)
 
     if [[ -z "$run_cmd" ]]; then

@@ -132,7 +132,12 @@ function Test-SafePath {
     try {
         $resolvedPath = [System.IO.Path]::GetFullPath($Path)
         $resolvedBase = [System.IO.Path]::GetFullPath($BasePath)
-        return $resolvedPath.StartsWith($resolvedBase, [StringComparison]::OrdinalIgnoreCase)
+
+        if ($resolvedPath -eq $resolvedBase) { return $true }
+
+        $sep = [System.IO.Path]::DirectorySeparatorChar
+        $baseWithSep = $resolvedBase.TrimEnd($sep) + $sep
+        return $resolvedPath.StartsWith($baseWithSep, [StringComparison]::OrdinalIgnoreCase)
     } catch {
         return $false
     }
@@ -743,10 +748,24 @@ if ($ShowChangelog) {
 }
 
 # Check if update is needed
-if ($CURRENT_VERSION -eq $LATEST_VERSION) {
+$updateNeeded = $false
+try {
+    $vCurrent = [System.Version]($CURRENT_VERSION -replace '^v','')
+    $vLatest = [System.Version]($LATEST_VERSION -replace '^v','')
+    if ($vLatest -gt $vCurrent) {
+        $updateNeeded = $true
+    }
+} catch {
+    # Fallback to string comparison
+    if ($CURRENT_VERSION -ne $LATEST_VERSION) {
+        $updateNeeded = $true
+    }
+}
+
+if (-not $updateNeeded) {
     Write-Host ""
     Write-ColorOutput "$script:MSG_ALREADY_LATEST" "Green"
-    Write-Log "Already on latest version" "INFO"
+    Write-Log "Already on latest version (Current: $CURRENT_VERSION, Latest: $LATEST_VERSION)" "INFO"
     Write-Host ""
     if (-not $Silent) { Read-Host "Press Enter to exit" }
     exit 0

@@ -166,12 +166,17 @@ validate_path() {
     local resolved_path=$(cd "$(dirname "$path")" 2>/dev/null && pwd)/$(basename "$path")
     local resolved_base=$(cd "$base_path" 2>/dev/null && pwd)
 
-    # Check if path starts with base
-    if [[ "$resolved_path" == "$resolved_base"* ]]; then
+    # Check if path is exactly base or starts with base/
+    if [[ "$resolved_path" == "$resolved_base" ]] || [[ "$resolved_path" == "$resolved_base"/* ]]; then
         return 0
     fi
 
     return 1
+}
+
+# Compare versions (returns 0 if $1 > $2)
+version_gt() {
+    python3 -c "import sys; v1=[int(x) for x in sys.argv[1].split('-')[0].split('.')]; v2=[int(x) for x in sys.argv[2].split('-')[0].split('.')]; print(1 if v1 > v2 else 0)" "$1" "$2" 2>/dev/null | grep -q 1
 }
 
 # Calculate SHA256 hash
@@ -710,12 +715,12 @@ if [[ "$SHOW_CHANGELOG" == true ]] && [[ "$SILENT" != true ]]; then
 fi
 
 # Check if update is needed
-if [[ "$CURRENT_VERSION" == "$LATEST_VERSION" ]]; then
+if [[ "$CURRENT_VERSION" == "$LATEST_VERSION" ]] || ! version_gt "$LATEST_VERSION" "$CURRENT_VERSION"; then
     if [[ "$SILENT" != true ]]; then
         echo ""
         echo -e "${GREEN}$MSG_ALREADY_LATEST${NC}"
     fi
-    write_log "INFO" "Already on latest version"
+    write_log "INFO" "Already on latest version (Current: $CURRENT_VERSION, Latest: $LATEST_VERSION)"
     exit 0
 fi
 

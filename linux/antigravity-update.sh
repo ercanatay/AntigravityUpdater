@@ -296,6 +296,11 @@ detect_install_format() {
     ASSET_FORMAT="appimage"
 }
 
+# Compare versions (returns 0 if $1 > $2)
+version_gt() {
+    python3 -c "import sys; v1=[int(x) for x in sys.argv[1].split('-')[0].split('.')]; v2=[int(x) for x in sys.argv[2].split('-')[0].split('.')]; print(1 if v1 > v2 else 0)" "$1" "$2" 2>/dev/null | grep -q 1
+}
+
 get_current_version() {
     local detected=""
 
@@ -374,32 +379,24 @@ app_arch = os.environ["APPIMAGE_ARCH"]
 
 patterns = {
     "deb": [
-        rf"_{deb_arch}\.deb$",
-        r"\.deb$",
-        rf"_{app_arch}\.AppImage$",
-        r"\.AppImage$",
-        rf"\.{rpm_arch}\.rpm$",
-        r"\.rpm$",
+        rf"[_.-]{deb_arch}\.deb$",
+        rf"[_.-]{app_arch}\.AppImage$",
+        rf"[_.-]{rpm_arch}\.rpm$",
     ],
     "rpm": [
-        rf"\.{rpm_arch}\.rpm$",
-        r"\.rpm$",
-        rf"_{app_arch}\.AppImage$",
-        r"\.AppImage$",
-        rf"_{deb_arch}\.deb$",
-        r"\.deb$",
+        rf"[_.-]{rpm_arch}\.rpm$",
+        rf"[_.-]{app_arch}\.AppImage$",
+        rf"[_.-]{deb_arch}\.deb$",
     ],
     "appimage": [
-        rf"_{app_arch}\.AppImage$",
-        r"\.AppImage$",
-        rf"_{deb_arch}\.deb$",
-        r"\.deb$",
-        rf"\.{rpm_arch}\.rpm$",
-        r"\.rpm$",
+        rf"[_.-]{app_arch}\.AppImage$",
+        rf"[_.-]{deb_arch}\.deb$",
+        rf"[_.-]{rpm_arch}\.rpm$",
     ],
 }
 
 selected = None
+# Try specific architecture matches first
 for pattern in patterns.get(fmt, []):
     for asset in assets:
         name = asset.get("name") or ""
@@ -411,14 +408,28 @@ for pattern in patterns.get(fmt, []):
     if selected:
         break
 
+# Fallback: strict generic match (no arch in name, or explicit 'noarch'/'universal')
+# We do NOT blind match any .deb/.rpm to avoid installing wrong arch (e.g. amd64 on arm64)
 if not selected:
-    for asset in assets:
-        name = asset.get("name") or ""
-        if name.lower().endswith(".sig"):
-            continue
-        lowered = name.lower()
-        if lowered.endswith(".deb") or lowered.endswith(".rpm") or lowered.endswith(".appimage"):
-            selected = asset
+    generic_patterns = {
+        "deb": [r"[_.-]all\.deb$", r"[_.-]noarch\.deb$", r"[_.-]universal\.deb$"],
+        "rpm": [r"[_.-]noarch\.rpm$", r"[_.-]all\.rpm$", r"[_.-]universal\.rpm$"],
+        "appimage": [r"[_.-]noarch\.AppImage$", r"[_.-]universal\.AppImage$"]
+    }
+
+    # Also allow bare extensions if we are desperate, but only if they don't contain conflicting arch strings?
+    # Actually, bare extension usually implies source or universal.
+    # But safer to just stick to what we know or fail.
+
+    for pattern in generic_patterns.get(fmt, []):
+        for asset in assets:
+            name = asset.get("name") or ""
+            if not name or name.lower().endswith(".sig"):
+                continue
+            if re.search(pattern, name, re.IGNORECASE):
+                selected = asset
+                break
+        if selected:
             break
 
 if not selected:
@@ -693,9 +704,9 @@ main() {
         print_msg ""
     fi
 
-    if [[ "$CURRENT_VERSION" == "$LATEST_VERSION" ]]; then
+    if [[ "$CURRENT_VERSION" == "$LATEST_VERSION" ]] || ! version_gt "$LATEST_VERSION" "$CURRENT_VERSION"; then
         print_msg "$MSG_ALREADY_LATEST"
-        write_log "INFO" "Already on latest version"
+        write_log "INFO" "Already on latest version (Current: $CURRENT_VERSION, Latest: $LATEST_VERSION)"
         exit 0
     fi
 

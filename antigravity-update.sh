@@ -630,8 +630,28 @@ fi
 
 # Optimization: Combine JSON parsing into a single python process to reduce startup overhead.
 # Uses shlex.quote to safely escape strings for eval.
-eval "$(echo "$RELEASE_INFO" | python3 -c "import sys, json, shlex; data=json.load(sys.stdin); print(f'LATEST_VERSION={shlex.quote(data.get('tag_name', '').lstrip('v'))}'); print(f'RELEASE_BODY={shlex.quote(data.get('body', ''))}')" 2>/dev/null || echo "")"
+# Reset parsed values to avoid reusing any pre-existing environment or stale script values.
+unset LATEST_VERSION RELEASE_BODY
+PARSE_ASSIGNMENTS="$(echo "$RELEASE_INFO" | python3 -c "import sys, json, shlex; data=json.load(sys.stdin); print(f'LATEST_VERSION={shlex.quote(data.get('tag_name', '').lstrip('v'))}'); print(f'RELEASE_BODY={shlex.quote(data.get('body', ''))}')" 2>/dev/null || echo "")"
 
+if [[ -z "$PARSE_ASSIGNMENTS" ]]; then
+    write_log "ERROR" "Failed to parse release information from GitHub response"
+    if [[ "$SILENT" != true ]]; then
+        echo -e "${RED}Error: Could not parse release information.${NC}"
+    fi
+    exit 1
+fi
+
+eval "$PARSE_ASSIGNMENTS"
+
+# Optional: validate that LATEST_VERSION matches an expected version pattern (e.g., 1.2.3 or 1.2.3-beta).
+if ! [[ "$LATEST_VERSION" =~ ^[0-9]+(\.[0-9]+)*(-[A-Za-z0-9._-]+)?$ ]]; then
+    write_log "ERROR" "Parsed latest version has unexpected format: '$LATEST_VERSION'"
+    if [[ "$SILENT" != true ]]; then
+        echo -e "${RED}Error: Parsed latest version has unexpected format.${NC}"
+    fi
+    exit 1
+fi
 if [[ -z "$LATEST_VERSION" ]]; then
     write_log "ERROR" "Could not parse latest version from GitHub response"
     if [[ "$SILENT" != true ]]; then

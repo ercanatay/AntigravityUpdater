@@ -1,7 +1,7 @@
 # Antigravity Tools Updater - Windows Version
 # Supports Windows 10/11 64-bit (including Bootcamp)
 # Supports 51 languages with automatic system language detection
-# Version 1.4.2 - Security Enhanced
+# Version 1.4.3 - Security Enhanced
 
 param(
     [switch]$Lang,
@@ -21,7 +21,7 @@ param(
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
 # Version
-$UPDATER_VERSION = "1.4.2"
+$UPDATER_VERSION = "1.4.3"
 
 # Settings
 $REPO_OWNER = "lbjlaq"

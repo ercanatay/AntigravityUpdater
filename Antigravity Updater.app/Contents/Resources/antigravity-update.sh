@@ -2,12 +2,12 @@
 
 # Antigravity Tools Updater - macOS Version
 # Supports 51 languages with automatic system language detection
-# Version 1.4.2 - Security Enhanced
+# Version 1.4.3 - Security Enhanced
 
 set -e
 
 # Version
-UPDATER_VERSION="1.4.2"
+UPDATER_VERSION="1.4.3"
 
 # Colors
 RED='\033[0;31m'

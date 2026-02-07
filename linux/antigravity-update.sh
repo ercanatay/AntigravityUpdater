@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-UPDATER_VERSION="1.4.2"
+UPDATER_VERSION="1.4.3"
 REPO_OWNER="lbjlaq"
 REPO_NAME="Antigravity-Manager"
 APP_CMD_NAME="antigravity-tools"

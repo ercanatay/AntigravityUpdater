@@ -8,7 +8,7 @@ This repository does **not** contain Antigravity Tools itself. It provides updat
 - Download and install/update with platform-specific logic
 
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux%20%7C%20Docker-blue)
-![Updater Release](https://img.shields.io/badge/updater-1.4.2-green)
+![Updater Release](https://img.shields.io/badge/updater-1.4.3-green)
 ![Languages](https://img.shields.io/badge/languages-51-orange)
 ![License](https://img.shields.io/badge/license-MIT-brightgreen)
 
@@ -282,7 +282,7 @@ chmod +x antigravity-update.sh
 
 ## Security Notes
 
-Current updaters include hardened locale loading and safer temp/log handling.
+Current updaters include hardened locale loading, safer temp/log handling, pre-install code-signature verification with bundle identity checks, symlink rejection, and `ditto`-based app copying.
 Security-related details are tracked in `CHANGELOG.md`.
 
 ## Repository Layout

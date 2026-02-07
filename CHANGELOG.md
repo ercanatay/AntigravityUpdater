@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-02-07
+
+### Added
+- Docker updater: `--changelog` flag to display GitHub release notes before pull/restart ([#5](https://github.com/ercanatay/AntigravityUpdater/pull/5))
+
+### Fixed
+- macOS: Add cleanup trap for temp directory to prevent leaks on unexpected exit ([#8](https://github.com/ercanatay/AntigravityUpdater/pull/8))
+- macOS: Add `--proxy` argument validation to prevent crash when URL is missing ([#8](https://github.com/ercanatay/AntigravityUpdater/pull/8))
+- macOS: Fix `.app` bundle locale path resolution ([#8](https://github.com/ercanatay/AntigravityUpdater/pull/8))
+- macOS: Fix unclosed box border characters in terminal UI ([#8](https://github.com/ercanatay/AntigravityUpdater/pull/8))
+- Linux: Replace overly broad `pkill -f` with `pkill -x` to prevent killing unrelated processes ([#8](https://github.com/ercanatay/AntigravityUpdater/pull/8))
+
+### Changed
+- Optimized JSON parsing in macOS, Linux, and Docker scripts to use a single `python3` invocation instead of two ([#7](https://github.com/ercanatay/AntigravityUpdater/pull/7))
+
+### Security
+- macOS: Verify code signature on DMG source app **before** removing the existing installation; failure is now fatal ([#12](https://github.com/ercanatay/AntigravityUpdater/pull/12))
+- macOS: Reject symlinked source apps to prevent path traversal ([#12](https://github.com/ercanatay/AntigravityUpdater/pull/12))
+- macOS: `verify_codesign()` now checks `CFBundleIdentifier` matches expected bundle ID ([#12](https://github.com/ercanatay/AntigravityUpdater/pull/12))
+- macOS: Validate `LATEST_VERSION` format and guard against stale env values ([#12](https://github.com/ercanatay/AntigravityUpdater/pull/12))
+- macOS: Replaced `cp -R` with `ditto` for backup, restore, and install operations ([#12](https://github.com/ercanatay/AntigravityUpdater/pull/12))
+- Bumped updater metadata and badges to `1.4.3`
+
 ## [1.4.2] - 2026-02-06
 
 ### Added

@@ -4,7 +4,7 @@
 # Supports 51 languages with automatic system language detection
 # Version 1.4.3 - Security Enhanced
 
-set -e
+set -eo pipefail
 
 # Version
 UPDATER_VERSION="1.4.3"
@@ -667,7 +667,7 @@ fi
 # Uses shlex.quote to safely escape strings for eval.
 # Reset parsed values to avoid reusing any pre-existing environment or stale script values.
 unset LATEST_VERSION RELEASE_BODY
-PARSE_ASSIGNMENTS="$(echo "$RELEASE_INFO" | python3 -c "import sys, json, shlex; data=json.load(sys.stdin); print(f'LATEST_VERSION={shlex.quote(data.get('tag_name', '').lstrip('v'))}'); print(f'RELEASE_BODY={shlex.quote(data.get('body', ''))}')" 2>/dev/null || echo "")"
+PARSE_ASSIGNMENTS="$(echo "$RELEASE_INFO" | python3 -c "import sys, json, shlex; data=json.load(sys.stdin); print(f'LATEST_VERSION={shlex.quote(data.get(\"tag_name\", \"\").lstrip(\"v\"))}'); print(f'RELEASE_BODY={shlex.quote(data.get(\"body\", \"\"))}')" 2>/dev/null || echo "")"
 
 if [[ -z "$PARSE_ASSIGNMENTS" ]]; then
     write_log "ERROR" "Failed to parse release information from GitHub response"

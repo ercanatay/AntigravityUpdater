@@ -273,7 +273,7 @@ fetch_latest_release_tag() {
 
     # Optimization: Combine JSON parsing into a single python process
     # Uses shlex.quote to safely escape strings for eval
-    eval "$(printf '%s' "$release_info" | python3 -c "import sys, json, shlex; data=json.load(sys.stdin); print(f'LATEST_RELEASE_TAG={shlex.quote(data.get('tag_name') or '')}'); print(f'LATEST_RELEASE_BODY={shlex.quote(data.get('body') or '')}')" 2>/dev/null || true)"
+    eval "$(printf '%s' "$release_info" | python3 -c "import sys, json, shlex; data=json.load(sys.stdin); print(f'LATEST_RELEASE_TAG={shlex.quote(data.get(\"tag_name\") or \"\")}'); print(f'LATEST_RELEASE_BODY={shlex.quote(data.get(\"body\") or \"\")}')" 2>/dev/null || true)"
 
     if [[ -z "$LATEST_RELEASE_TAG" ]]; then
         write_log "ERROR" "Could not parse tag_name from GitHub response"

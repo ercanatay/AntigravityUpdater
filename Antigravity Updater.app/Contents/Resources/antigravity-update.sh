@@ -4,7 +4,7 @@
 # Supports 51 languages with automatic system language detection
 # Version 1.4.3 - Security Enhanced
 
-set -e
+set -eo pipefail
 
 # Version
 UPDATER_VERSION="1.4.3"
@@ -23,6 +23,7 @@ REPO_OWNER="lbjlaq"
 REPO_NAME="Antigravity-Manager"
 APP_NAME="Antigravity Tools"
 APP_PATH="/Applications/Antigravity Tools.app"
+EXPECTED_BUNDLE_ID="com.lbjlaq.antigravity-tools"  # Expected bundle identifier for signature verification
 
 # Script directory detection
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -187,9 +188,43 @@ verify_codesign() {
     local app_path="$1"
 
     if [[ -d "$app_path" ]]; then
-        if codesign --verify --deep --strict "$app_path" 2>/dev/null; then
-            return 0
+        # First, verify the signature is valid
+        if ! codesign --verify --deep --strict "$app_path" 2>/dev/null; then
+            write_log "ERROR" "Code signature verification failed: signature is invalid"
+            return 1
         fi
+
+        # Extract the bundle identifier from the app
+        local bundle_id
+        bundle_id=$(defaults read "$app_path/Contents/Info.plist" CFBundleIdentifier 2>/dev/null || echo "")
+
+        if [[ -z "$bundle_id" ]]; then
+            write_log "ERROR" "Could not read bundle identifier from app"
+            return 1
+        fi
+
+        # Verify bundle identifier matches expected value (mandatory check)
+        if [[ -z "$EXPECTED_BUNDLE_ID" ]]; then
+            write_log "ERROR" "EXPECTED_BUNDLE_ID not configured - cannot verify app identity"
+            return 1
+        fi
+
+        if [[ "$bundle_id" != "$EXPECTED_BUNDLE_ID" ]]; then
+            write_log "ERROR" "Bundle identifier mismatch: expected '$EXPECTED_BUNDLE_ID', got '$bundle_id'"
+            return 1
+        fi
+        write_log "INFO" "Bundle identifier verified: $bundle_id"
+
+        # Extract and log the Team ID for additional verification
+        local team_id
+        team_id=$(codesign -dv "$app_path" 2>&1 | grep "TeamIdentifier" | cut -d= -f2 | xargs 2>/dev/null || echo "")
+        if [[ -n "$team_id" ]]; then
+            write_log "INFO" "App signed by Team ID: $team_id"
+        else
+            write_log "WARN" "Could not extract Team ID from signature"
+        fi
+
+        return 0
     fi
 
     return 1
@@ -256,7 +291,7 @@ create_backup() {
     local backup_name="backup_$timestamp"
     local backup_path="$BACKUP_DIR/$backup_name"
 
-    if cp -R "$app_path" "$backup_path" 2>/dev/null; then
+    if ditto "$app_path" "$backup_path" 2>/dev/null; then
         # Keep only last 3 backups
         local backups=($(ls -dt "$BACKUP_DIR"/backup_* 2>/dev/null))
         if [[ ${#backups[@]} -gt 3 ]]; then
@@ -289,7 +324,7 @@ restore_backup() {
     fi
 
     # Restore from backup
-    if cp -R "$latest_backup" "$APP_PATH" 2>/dev/null; then
+    if ditto "$latest_backup" "$APP_PATH" 2>/dev/null; then
         # Remove quarantine
         xattr -cr "$APP_PATH" 2>/dev/null || true
 
@@ -628,8 +663,38 @@ if [[ -z "$RELEASE_INFO" ]] || [[ "$RELEASE_INFO" == *"rate limit"* ]]; then
     exit 1
 fi
 
-LATEST_VERSION=$(echo "$RELEASE_INFO" | python3 -c "import sys, json; print(json.load(sys.stdin).get('tag_name', '').lstrip('v'))" 2>/dev/null || echo "")
-RELEASE_BODY=$(echo "$RELEASE_INFO" | python3 -c "import sys, json; print(json.load(sys.stdin).get('body', ''))" 2>/dev/null || echo "")
+# Optimization: Combine JSON parsing into a single python process to reduce startup overhead.
+# Uses shlex.quote to safely escape strings for eval.
+# Reset parsed values to avoid reusing any pre-existing environment or stale script values.
+unset LATEST_VERSION RELEASE_BODY
+PARSE_ASSIGNMENTS="$(echo "$RELEASE_INFO" | python3 -c "import sys, json, shlex; data=json.load(sys.stdin); print(f'LATEST_VERSION={shlex.quote(data.get(\"tag_name\", \"\").lstrip(\"v\"))}'); print(f'RELEASE_BODY={shlex.quote(data.get(\"body\", \"\"))}')" 2>/dev/null || echo "")"
+
+if [[ -z "$PARSE_ASSIGNMENTS" ]]; then
+    write_log "ERROR" "Failed to parse release information from GitHub response"
+    if [[ "$SILENT" != true ]]; then
+        echo -e "${RED}Error: Could not parse release information.${NC}"
+    fi
+    exit 1
+fi
+
+eval "$PARSE_ASSIGNMENTS"
+
+if [[ -z "$LATEST_VERSION" ]]; then
+    write_log "ERROR" "Could not parse latest version from GitHub response"
+    if [[ "$SILENT" != true ]]; then
+        echo -e "${RED}Error: Could not parse latest version.${NC}"
+    fi
+    exit 1
+fi
+
+# Validate that LATEST_VERSION matches an expected version pattern (e.g., 1.2.3 or 1.2.3-beta)
+if ! [[ "$LATEST_VERSION" =~ ^[0-9]+(\.[0-9]+)*(-[A-Za-z0-9._-]+)?$ ]]; then
+    write_log "ERROR" "Parsed latest version has unexpected format: '$LATEST_VERSION'"
+    if [[ "$SILENT" != true ]]; then
+        echo -e "${RED}Error: Parsed latest version has unexpected format.${NC}"
+    fi
+    exit 1
+fi
 
 if [[ "$SILENT" != true ]]; then
     echo -e "   $MSG_LATEST:    ${GREEN}$LATEST_VERSION${NC}"
@@ -747,6 +812,50 @@ if [[ "$SILENT" != true ]]; then
     echo -e "${GREEN}$MSG_MOUNTED: $MOUNT_POINT${NC}"
 fi
 
+SOURCE_APP="$MOUNT_POINT/$APP_NAME.app"
+
+if [[ ! -d "$SOURCE_APP" ]]; then
+    SOURCE_APP=$(find "$MOUNT_POINT" -maxdepth 1 -name "*.app" | head -1)
+fi
+
+# Security: Ensure source is a real directory, not a symlink
+if [[ -L "$SOURCE_APP" ]]; then
+    if [[ "$SILENT" != true ]]; then
+        echo -e "${RED}Error: Source application is a symlink${NC}"
+    fi
+    write_log "ERROR" "Source application is a symlink: $SOURCE_APP"
+    hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
+    exit 1
+fi
+
+if [[ -z "$SOURCE_APP" ]] || [[ ! -d "$SOURCE_APP" ]]; then
+    if [[ "$SILENT" != true ]]; then
+        echo -e "${RED}$MSG_APP_NOT_FOUND${NC}"
+    fi
+    write_log "ERROR" "Application not found in DMG"
+    hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
+    exit 1
+fi
+
+# Verify code signature
+if [[ "$SILENT" != true ]]; then
+    echo -e "${BLUE}$MSG_CODESIGN_CHECK${NC}"
+fi
+
+if verify_codesign "$SOURCE_APP"; then
+    if [[ "$SILENT" != true ]]; then
+        echo -e "${GREEN}$MSG_CODESIGN_OK${NC}"
+    fi
+    write_log "INFO" "Code signature valid"
+else
+    if [[ "$SILENT" != true ]]; then
+        echo -e "${RED}Code signature verification failed!${NC}"
+    fi
+    write_log "ERROR" "Code signature verification failed"
+    hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
+    exit 1
+fi
+
 # Close running application
 if [[ "$SILENT" != true ]]; then
     echo -e "${BLUE}$MSG_CLOSING_APP${NC}"
@@ -766,42 +875,19 @@ if [[ "$SILENT" != true ]]; then
     echo -e "${BLUE}$MSG_COPYING_NEW${NC}"
 fi
 
-SOURCE_APP="$MOUNT_POINT/$APP_NAME.app"
-
-if [[ ! -d "$SOURCE_APP" ]]; then
-    SOURCE_APP=$(find "$MOUNT_POINT" -maxdepth 1 -name "*.app" | head -1)
-fi
-
-if [[ -z "$SOURCE_APP" ]] || [[ ! -d "$SOURCE_APP" ]]; then
+# Use ditto for safer app bundle copying (preserves resource forks/permissions)
+if ditto "$SOURCE_APP" "$APP_PATH"; then
     if [[ "$SILENT" != true ]]; then
-        echo -e "${RED}$MSG_APP_NOT_FOUND${NC}"
+        echo -e "${GREEN}$MSG_COPIED${NC}"
     fi
-    write_log "ERROR" "Application not found in DMG"
-    hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
-    exit 1
-fi
-
-cp -R "$SOURCE_APP" "$APP_PATH"
-if [[ "$SILENT" != true ]]; then
-    echo -e "${GREEN}$MSG_COPIED${NC}"
-fi
-write_log "INFO" "Application installed to: $APP_PATH"
-
-# Verify code signature
-if [[ "$SILENT" != true ]]; then
-    echo -e "${BLUE}$MSG_CODESIGN_CHECK${NC}"
-fi
-
-if verify_codesign "$APP_PATH"; then
-    if [[ "$SILENT" != true ]]; then
-        echo -e "${GREEN}$MSG_CODESIGN_OK${NC}"
-    fi
-    write_log "INFO" "Code signature valid"
+    write_log "INFO" "Application installed to: $APP_PATH"
 else
     if [[ "$SILENT" != true ]]; then
-        echo -e "${YELLOW}$MSG_CODESIGN_WARN${NC}"
+        echo -e "${RED}Failed to copy application${NC}"
     fi
-    write_log "WARN" "Code signature not verified"
+    write_log "ERROR" "Failed to copy application with ditto"
+    hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
+    exit 1
 fi
 
 # Remove quarantine

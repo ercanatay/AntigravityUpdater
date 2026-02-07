@@ -203,20 +203,25 @@ verify_codesign() {
             return 1
         fi
         
-        # Verify bundle identifier matches expected value
-        if [[ -n "$EXPECTED_BUNDLE_ID" ]]; then
-            if [[ "$bundle_id" != "$EXPECTED_BUNDLE_ID" ]]; then
-                write_log "ERROR" "Bundle identifier mismatch: expected '$EXPECTED_BUNDLE_ID', got '$bundle_id'"
-                return 1
-            fi
-            write_log "INFO" "Bundle identifier verified: $bundle_id"
+        # Verify bundle identifier matches expected value (mandatory check)
+        if [[ -z "$EXPECTED_BUNDLE_ID" ]]; then
+            write_log "ERROR" "EXPECTED_BUNDLE_ID not configured - cannot verify app identity"
+            return 1
         fi
+        
+        if [[ "$bundle_id" != "$EXPECTED_BUNDLE_ID" ]]; then
+            write_log "ERROR" "Bundle identifier mismatch: expected '$EXPECTED_BUNDLE_ID', got '$bundle_id'"
+            return 1
+        fi
+        write_log "INFO" "Bundle identifier verified: $bundle_id"
         
         # Extract and log the Team ID for additional verification
         local team_id
-        team_id=$(codesign -dv "$app_path" 2>&1 | grep "TeamIdentifier" | cut -d= -f2 || echo "")
+        team_id=$(codesign -dv "$app_path" 2>&1 | grep "TeamIdentifier" | cut -d= -f2 | xargs 2>/dev/null || echo "")
         if [[ -n "$team_id" ]]; then
             write_log "INFO" "App signed by Team ID: $team_id"
+        else
+            write_log "WARN" "Could not extract Team ID from signature"
         fi
         
         return 0

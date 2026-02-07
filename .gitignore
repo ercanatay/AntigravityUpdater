@@ -33,3 +33,4 @@ GUVENLIK_CONFIG.txt
 KURULUM*.txt
 TEST_RAPORU.txt
 test_summary.txt
+tests/

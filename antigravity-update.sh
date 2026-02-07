@@ -630,28 +630,8 @@ fi
 
 # Optimization: Combine JSON parsing into a single python process to reduce startup overhead.
 # Uses shlex.quote to safely escape strings for eval.
-# Reset parsed values to avoid reusing any pre-existing environment or stale script values.
-unset LATEST_VERSION RELEASE_BODY
-PARSE_ASSIGNMENTS="$(echo "$RELEASE_INFO" | python3 -c "import sys, json, shlex; data=json.load(sys.stdin); print(f'LATEST_VERSION={shlex.quote(data.get('tag_name', '').lstrip('v'))}'); print(f'RELEASE_BODY={shlex.quote(data.get('body', ''))}')" 2>/dev/null || echo "")"
+eval "$(echo "$RELEASE_INFO" | python3 -c "import sys, json, shlex; data=json.load(sys.stdin); print(f'LATEST_VERSION={shlex.quote(data.get('tag_name', '').lstrip('v'))}'); print(f'RELEASE_BODY={shlex.quote(data.get('body', ''))}')" 2>/dev/null || echo "")"
 
-if [[ -z "$PARSE_ASSIGNMENTS" ]]; then
-    write_log "ERROR" "Failed to parse release information from GitHub response"
-    if [[ "$SILENT" != true ]]; then
-        echo -e "${RED}Error: Could not parse release information.${NC}"
-    fi
-    exit 1
-fi
-
-eval "$PARSE_ASSIGNMENTS"
-
-# Optional: validate that LATEST_VERSION matches an expected version pattern (e.g., 1.2.3 or 1.2.3-beta).
-if ! [[ "$LATEST_VERSION" =~ ^[0-9]+(\.[0-9]+)*(-[A-Za-z0-9._-]+)?$ ]]; then
-    write_log "ERROR" "Parsed latest version has unexpected format: '$LATEST_VERSION'"
-    if [[ "$SILENT" != true ]]; then
-        echo -e "${RED}Error: Parsed latest version has unexpected format.${NC}"
-    fi
-    exit 1
-fi
 if [[ -z "$LATEST_VERSION" ]]; then
     write_log "ERROR" "Could not parse latest version from GitHub response"
     if [[ "$SILENT" != true ]]; then
@@ -782,6 +762,16 @@ if [[ ! -d "$SOURCE_APP" ]]; then
     SOURCE_APP=$(find "$MOUNT_POINT" -maxdepth 1 -name "*.app" | head -1)
 fi
 
+# Security: Ensure source is a real directory, not a symlink
+if [[ -L "$SOURCE_APP" ]]; then
+    if [[ "$SILENT" != true ]]; then
+        echo -e "${RED}Error: Source application is a symlink${NC}"
+    fi
+    write_log "ERROR" "Source application is a symlink: $SOURCE_APP"
+    hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
+    exit 1
+fi
+
 if [[ -z "$SOURCE_APP" ]] || [[ ! -d "$SOURCE_APP" ]]; then
     if [[ "$SILENT" != true ]]; then
         echo -e "${RED}$MSG_APP_NOT_FOUND${NC}"
@@ -829,11 +819,19 @@ if [[ "$SILENT" != true ]]; then
     echo -e "${BLUE}$MSG_COPYING_NEW${NC}"
 fi
 
-cp -R "$SOURCE_APP" "$APP_PATH"
-if [[ "$SILENT" != true ]]; then
-    echo -e "${GREEN}$MSG_COPIED${NC}"
+# Use ditto for safer app bundle copying (preserves resource forks/permissions)
+if ditto "$SOURCE_APP" "$APP_PATH"; then
+    if [[ "$SILENT" != true ]]; then
+        echo -e "${GREEN}$MSG_COPIED${NC}"
+    fi
+    write_log "INFO" "Application installed to: $APP_PATH"
+else
+    if [[ "$SILENT" != true ]]; then
+        echo -e "${RED}Failed to copy application${NC}"
+    fi
+    write_log "ERROR" "Failed to copy application with ditto"
+    exit 1
 fi
-write_log "INFO" "Application installed to: $APP_PATH"
 
 # Remove quarantine
 if [[ "$SILENT" != true ]]; then

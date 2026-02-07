@@ -351,7 +351,7 @@ fetch_release_info() {
 
     # Optimization: Combine JSON parsing into a single python process
     # Uses shlex.quote to safely escape strings for eval
-    eval "$(printf '%s' "$RELEASE_INFO" | python3 -c "import sys, json, shlex; data=json.load(sys.stdin); print(f'LATEST_VERSION={shlex.quote((data.get('tag_name') or '').lstrip('v'))}'); print(f'RELEASE_BODY={shlex.quote(data.get('body') or '')}')" 2>/dev/null || true)"
+    eval "$(printf '%s' "$RELEASE_INFO" | python3 -c "import sys, json, shlex; data=json.load(sys.stdin); print(f'LATEST_VERSION={shlex.quote((data.get(\"tag_name\") or \"\").lstrip(\"v\"))}'); print(f'RELEASE_BODY={shlex.quote(data.get(\"body\") or \"\")}')" 2>/dev/null || true)"
 
     if [[ -z "$LATEST_VERSION" ]]; then
         write_log "ERROR" "Could not parse latest version from GitHub response"

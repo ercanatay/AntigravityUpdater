@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-02-08
+
+### Added
+- macOS updater now selects install assets from the GitHub release asset list instead of relying on a fixed DMG filename.
+- macOS updater now supports `.app.tar.gz` assets as a fallback when a compatible `.dmg` is unavailable.
+- Added architecture-aware asset matching for Apple Silicon and Intel variants (`aarch64`, `arm64`, `x64`, `x86_64`, `amd64`, `universal`).
+
+### Changed
+- Updated `README.md` with release-asset extension support details in American English.
+- Bumped updater metadata and badges to `1.6.0`.
+
 ## [1.5.0] - 2026-02-08
 
 ### Added

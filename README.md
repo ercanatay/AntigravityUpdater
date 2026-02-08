@@ -5,7 +5,7 @@ Unofficial update scripts for [Antigravity Tools](https://github.com/lbjlaq/Anti
 > This repository **does not include the Antigravity Tools application**. It only includes updater tools.
 
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux%20%7C%20Docker-blue)
-![Updater Release](https://img.shields.io/badge/updater-1.5.0-green)
+![Updater Release](https://img.shields.io/badge/updater-1.6.0-green)
 ![Languages](https://img.shields.io/badge/languages-51-orange)
 ![License](https://img.shields.io/badge/license-MIT-brightgreen)
 
@@ -33,7 +33,7 @@ The updaters in this repository:
 
 1. Check the latest version in the `lbjlaq/Antigravity-Manager` repository.
 2. Compare it with the currently installed version.
-3. Download and update it in a platform-appropriate way.
+3. Select the best release asset for your platform, then download and install it.
 
 ## Versions and Releases
 
@@ -46,7 +46,7 @@ The updaters in this repository:
 
 | Target | Command | What It Updates |
 |---|---|---|
-| macOS app installation | `./antigravity-update.sh` | `/Applications/Antigravity Tools.app` |
+| macOS app installation | `./antigravity-update.sh` | `/Applications/Antigravity Tools.app` (from `.dmg` or `.app.tar.gz`) |
 | Windows app installation | `./windows/antigravity-update.ps1` (or `./windows/AntigravityUpdater.bat`) | Local Antigravity Tools installation |
 | Linux app installation | `./linux/antigravity-update.sh` | `.deb`, `.rpm`, or `.AppImage` installation |
 | Docker deployment | `./docker/antigravity-docker-update.sh` | Docker image/tag update and optional container recreation |
@@ -66,6 +66,7 @@ The updaters in this repository:
 | Pre-update backup | ✅ | ✅ | ❌ | ❌ |
 | Rollback | ✅ | ✅ | ❌ | ❌ |
 | Package type selection | ❌ | ❌ | ✅ | ❌ |
+| Release asset extension fallback | ✅ | ✅ | ✅ | ❌ |
 | Restart running process | App reopens | App reopens | Process is terminated | Optional container recreate |
 
 ## Quick Start
@@ -351,7 +352,7 @@ chmod +x antigravity-update.sh
 
 The current version includes security hardening, especially on macOS:
 
-- Code-signature verification for the source app inside the DMG before installation
+- Code-signature verification for the source app before installation (from DMG or extracted app archive)
 - Expected `CFBundleIdentifier` validation
 - Symlink source app rejection
 - Safer copy/restore using `ditto` instead of `cp -R`

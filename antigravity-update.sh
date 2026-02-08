@@ -3,12 +3,12 @@
 
 # Antigravity Tools Updater - macOS Version
 # Supports 51 languages with automatic system language detection
-# Version 1.5.0 - Security Enhanced
+# Version 1.6.0 - Security Enhanced
 
 set -eo pipefail
 
 # Version
-UPDATER_VERSION="1.5.0"
+UPDATER_VERSION="1.6.0"
 
 # Colors
 RED='\033[0;31m'
@@ -539,6 +539,96 @@ show_changelog() {
     echo ""
 }
 
+# Select best macOS release asset for this architecture.
+# Prefers DMG, then falls back to .app.tar.gz.
+select_macos_asset() {
+    local selection
+
+    selection=$(RELEASE_INFO_JSON="$RELEASE_INFO" TARGET_ARCH="$ARCH" python3 - <<'PY'
+import json
+import os
+import re
+import sys
+
+release = json.loads(os.environ["RELEASE_INFO_JSON"])
+assets = release.get("assets") or []
+target_arch = os.environ.get("TARGET_ARCH", "universal")
+
+if target_arch == "aarch64":
+    preferred_tokens = ["aarch64", "arm64", "universal"]
+    forbidden_tokens = ["x64", "x86_64", "amd64", "intel"]
+else:
+    preferred_tokens = ["x64", "x86_64", "amd64", "universal"]
+    forbidden_tokens = ["aarch64", "arm64", "armv8", "apple-silicon"]
+
+
+def has_token(name: str, token: str) -> bool:
+    return re.search(rf'(?i)(^|[._-]){re.escape(token)}([._-]|$)', name) is not None
+
+
+def get_type(name: str):
+    lower = name.lower()
+    if lower.endswith(".dmg"):
+        return "dmg"
+    if lower.endswith(".app.tar.gz"):
+        return "app-tar-gz"
+    return None
+
+
+type_rank = {"dmg": 0, "app-tar-gz": 1}
+scored = []
+
+for asset in assets:
+    name = asset.get("name") or ""
+    url = asset.get("browser_download_url") or ""
+    if not name or not url:
+        continue
+
+    lower = name.lower()
+    if lower.endswith(".sig") or lower == "updater.json":
+        continue
+
+    asset_type = get_type(name)
+    if not asset_type:
+        continue
+
+    arch_rank = None
+    for idx, token in enumerate(preferred_tokens):
+        if has_token(name, token):
+            arch_rank = idx
+            break
+
+    if arch_rank is None:
+        if any(has_token(name, token) for token in forbidden_tokens):
+            continue
+        arch_rank = len(preferred_tokens) + 1
+
+    scored.append((type_rank[asset_type], arch_rank, lower, name, url, asset_type))
+
+if not scored:
+    sys.exit(1)
+
+scored.sort()
+_, _, _, name, url, asset_type = scored[0]
+print(name)
+print(url)
+print(asset_type)
+PY
+)
+
+    if [[ -z "$selection" ]]; then
+        write_log "ERROR" "No compatible macOS asset found in release"
+        if [[ "$SILENT" != true ]]; then
+            echo -e "${RED}Error: No compatible macOS download found in release assets.${NC}"
+        fi
+        exit 1
+    fi
+
+    SELECTED_ASSET_NAME=$(printf '%s\n' "$selection" | sed -n '1p')
+    SELECTED_ASSET_URL=$(printf '%s\n' "$selection" | sed -n '2p')
+    SELECTED_ASSET_TYPE=$(printf '%s\n' "$selection" | sed -n '3p')
+}
+
 # Print usage
 print_usage() {
     echo "Antigravity Tools Updater v$UPDATER_VERSION"
@@ -879,6 +969,10 @@ if [[ "$SILENT" != true ]]; then
     echo -e "${YELLOW}$MSG_NEW_VERSION${NC}"
 fi
 
+# Select download asset from release list
+select_macos_asset
+DOWNLOAD_PATH="$TEMP_DIR/$SELECTED_ASSET_NAME"
+
 # Create backup before update
 if [[ "$NO_BACKUP" != true ]] && [[ -d "$APP_PATH" ]]; then
     if [[ "$SILENT" != true ]]; then
@@ -897,24 +991,26 @@ if [[ "$NO_BACKUP" != true ]] && [[ -d "$APP_PATH" ]]; then
     fi
 fi
 
-# Download DMG
-DMG_NAME="Antigravity.Tools_${LATEST_VERSION}_${ARCH}.dmg"
-DOWNLOAD_URL="https://github.com/$REPO_OWNER/$REPO_NAME/releases/download/v$LATEST_VERSION/$DMG_NAME"
-DMG_PATH="$TEMP_DIR/$DMG_NAME"
-
+# Download selected asset
 if [[ "$SILENT" != true ]]; then
     echo -e "${BLUE}$MSG_DOWNLOADING${NC}"
-    echo "   $DOWNLOAD_URL"
+    echo "   $SELECTED_ASSET_URL"
 fi
-write_log "INFO" "Download URL: $DOWNLOAD_URL"
+write_log "INFO" "Selected release asset: $SELECTED_ASSET_NAME ($SELECTED_ASSET_TYPE)"
+write_log "INFO" "Download URL: $SELECTED_ASSET_URL"
 
 # Build download command with optional proxy
-declare -a DOWNLOAD_OPTS=("-L" "--progress-bar" "-o" "$DMG_PATH")
+declare -a DOWNLOAD_OPTS=("-L" "-o" "$DOWNLOAD_PATH")
+if [[ "$SILENT" != true ]]; then
+    DOWNLOAD_OPTS+=("--progress-bar")
+else
+    DOWNLOAD_OPTS+=("-sS")
+fi
 if [[ -n "$PROXY_URL" ]]; then
     DOWNLOAD_OPTS+=("--proxy" "$PROXY_URL")
 fi
 
-if ! curl "${DOWNLOAD_OPTS[@]}" "$DOWNLOAD_URL"; then
+if ! curl "${DOWNLOAD_OPTS[@]}" "$SELECTED_ASSET_URL"; then
     if [[ "$SILENT" != true ]]; then
         echo -e "${RED}$MSG_DOWNLOAD_FAILED${NC}"
     fi
@@ -928,46 +1024,72 @@ if [[ "$SILENT" != true ]]; then
 fi
 
 # Verify downloaded file
-if ! verify_download "$DMG_PATH"; then
+if ! verify_download "$DOWNLOAD_PATH"; then
     if [[ "$SILENT" != true ]]; then
         echo -e "${RED}File verification failed${NC}"
     fi
     exit 1
 fi
 
-# Mount DMG
-if [[ "$SILENT" != true ]]; then
-    echo -e "${BLUE}$MSG_MOUNTING${NC}"
-fi
+MOUNT_POINT=""
+SOURCE_APP=""
 
-MOUNT_OUTPUT=$(hdiutil attach "$DMG_PATH" -nobrowse -quiet 2>&1)
-MOUNT_POINT=$(echo "$MOUNT_OUTPUT" | grep "/Volumes/" | sed 's|.*\(/Volumes/.*\)|\1|')
-
-if [[ -z "$MOUNT_POINT" ]]; then
-    shopt -s nullglob
-    volume_candidates=(/Volumes/*Antigravity*)
-    shopt -u nullglob
-    if [[ ${#volume_candidates[@]} -gt 0 ]]; then
-        MOUNT_POINT="${volume_candidates[0]}"
-    fi
-fi
-
-if [[ -z "$MOUNT_POINT" ]] || [[ ! -d "$MOUNT_POINT" ]]; then
+if [[ "$SELECTED_ASSET_TYPE" == "dmg" ]]; then
     if [[ "$SILENT" != true ]]; then
-        echo -e "${RED}$MSG_MOUNT_FAILED${NC}"
+        echo -e "${BLUE}$MSG_MOUNTING${NC}"
     fi
-    write_log "ERROR" "Failed to mount DMG"
+
+    MOUNT_OUTPUT=$(hdiutil attach "$DOWNLOAD_PATH" -nobrowse -quiet 2>&1)
+    MOUNT_POINT=$(echo "$MOUNT_OUTPUT" | grep "/Volumes/" | sed 's|.*\(/Volumes/.*\)|\1|')
+
+    if [[ -z "$MOUNT_POINT" ]]; then
+        shopt -s nullglob
+        volume_candidates=(/Volumes/*Antigravity*)
+        shopt -u nullglob
+        if [[ ${#volume_candidates[@]} -gt 0 ]]; then
+            MOUNT_POINT="${volume_candidates[0]}"
+        fi
+    fi
+
+    if [[ -z "$MOUNT_POINT" ]] || [[ ! -d "$MOUNT_POINT" ]]; then
+        if [[ "$SILENT" != true ]]; then
+            echo -e "${RED}$MSG_MOUNT_FAILED${NC}"
+        fi
+        write_log "ERROR" "Failed to mount DMG"
+        exit 1
+    fi
+
+    if [[ "$SILENT" != true ]]; then
+        echo -e "${GREEN}$MSG_MOUNTED: $MOUNT_POINT${NC}"
+    fi
+
+    SOURCE_APP="$MOUNT_POINT/$APP_NAME.app"
+
+    if [[ ! -d "$SOURCE_APP" ]]; then
+        SOURCE_APP=$(find "$MOUNT_POINT" -maxdepth 1 -name "*.app" | head -1)
+    fi
+elif [[ "$SELECTED_ASSET_TYPE" == "app-tar-gz" ]]; then
+    EXTRACT_DIR="$TEMP_DIR/extracted"
+    mkdir -p "$EXTRACT_DIR"
+
+    if ! tar -xzf "$DOWNLOAD_PATH" -C "$EXTRACT_DIR"; then
+        if [[ "$SILENT" != true ]]; then
+            echo -e "${RED}Failed to extract application archive${NC}"
+        fi
+        write_log "ERROR" "Failed to extract archive: $SELECTED_ASSET_NAME"
+        exit 1
+    fi
+
+    SOURCE_APP="$EXTRACT_DIR/$APP_NAME.app"
+    if [[ ! -d "$SOURCE_APP" ]]; then
+        SOURCE_APP=$(find "$EXTRACT_DIR" -type d -name "*.app" | head -1)
+    fi
+else
+    if [[ "$SILENT" != true ]]; then
+        echo -e "${RED}Unsupported asset type: $SELECTED_ASSET_TYPE${NC}"
+    fi
+    write_log "ERROR" "Unsupported asset type selected: $SELECTED_ASSET_TYPE"
     exit 1
-fi
-
-if [[ "$SILENT" != true ]]; then
-    echo -e "${GREEN}$MSG_MOUNTED: $MOUNT_POINT${NC}"
-fi
-
-SOURCE_APP="$MOUNT_POINT/$APP_NAME.app"
-
-if [[ ! -d "$SOURCE_APP" ]]; then
-    SOURCE_APP=$(find "$MOUNT_POINT" -maxdepth 1 -name "*.app" | head -1)
 fi
 
 # Security: Ensure source is a real directory, not a symlink
@@ -976,7 +1098,9 @@ if [[ -L "$SOURCE_APP" ]]; then
         echo -e "${RED}Error: Source application is a symlink${NC}"
     fi
     write_log "ERROR" "Source application is a symlink: $SOURCE_APP"
-    hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
+    if [[ -n "$MOUNT_POINT" ]]; then
+        hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
+    fi
     exit 1
 fi
 
@@ -984,8 +1108,10 @@ if [[ -z "$SOURCE_APP" ]] || [[ ! -d "$SOURCE_APP" ]]; then
     if [[ "$SILENT" != true ]]; then
         echo -e "${RED}$MSG_APP_NOT_FOUND${NC}"
     fi
-    write_log "ERROR" "Application not found in DMG"
-    hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
+    write_log "ERROR" "Application not found in selected package: $SELECTED_ASSET_NAME"
+    if [[ -n "$MOUNT_POINT" ]]; then
+        hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
+    fi
     exit 1
 fi
 
@@ -1004,7 +1130,9 @@ else
         echo -e "${RED}Code signature verification failed!${NC}"
     fi
     write_log "ERROR" "Code signature verification failed"
-    hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
+    if [[ -n "$MOUNT_POINT" ]]; then
+        hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
+    fi
     exit 1
 fi
 
@@ -1038,7 +1166,9 @@ else
         echo -e "${RED}Failed to copy application${NC}"
     fi
     write_log "ERROR" "Failed to copy application with ditto"
-    hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
+    if [[ -n "$MOUNT_POINT" ]]; then
+        hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
+    fi
     exit 1
 fi
 
@@ -1051,11 +1181,13 @@ if [[ "$SILENT" != true ]]; then
     echo -e "${GREEN}$MSG_QUARANTINE_REMOVED${NC}"
 fi
 
-# Unmount DMG
-if [[ "$SILENT" != true ]]; then
-    echo -e "${BLUE}$MSG_UNMOUNTING${NC}"
+# Unmount DMG if one was mounted
+if [[ -n "$MOUNT_POINT" ]]; then
+    if [[ "$SILENT" != true ]]; then
+        echo -e "${BLUE}$MSG_UNMOUNTING${NC}"
+    fi
+    hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
 fi
-hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
 
 # Success message
 if [[ "$SILENT" != true ]]; then

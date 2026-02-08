@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034
 
 # Antigravity Tools Docker Updater
 # Pulls and optionally restarts a Docker deployment with the latest image tag.
@@ -43,6 +44,7 @@ CONTAINER_EXISTS=false
 declare -a LANG_CODES=("en" "tr" "de" "fr" "es" "it" "pt" "ru" "zh" "zh-TW" "ja" "ko" "ar" "nl" "pl" "sv" "no" "da" "fi" "uk" "cs" "hi" "el" "he" "th" "vi" "id" "ms" "hu" "ro" "bg" "hr" "sr" "sk" "sl" "lt" "lv" "et" "ca" "eu" "gl" "is" "fa" "sw" "af" "fil" "bn" "ta" "ur" "mi" "cy")
 declare -a LANG_NAMES=("English" "Turkce" "Deutsch" "Francais" "Espanol" "Italiano" "Portugues" "Russkiy" "Zhongwen" "Zhongwen-TW" "Nihongo" "Hangugeo" "Arabiya" "Nederlands" "Polski" "Svenska" "Norsk" "Dansk" "Suomi" "Ukrayinska" "Cestina" "Hindi" "Ellinika" "Ivrit" "Thai" "Tieng Viet" "Bahasa Indonesia" "Bahasa Melayu" "Magyar" "Romana" "Balgarski" "Hrvatski" "Srpski" "Slovencina" "Slovenscina" "Lietuviu" "Latviesu" "Eesti" "Catala" "Euskara" "Galego" "Islenska" "Farsi" "Kiswahili" "Afrikaans" "Filipino" "Bangla" "Tamil" "Urdu" "Te Reo Maori" "Cymraeg")
 
+# Default messages (overridden by locale files via source)
 MSG_TITLE="Antigravity Tools Updater"
 MSG_CHECKING_VERSION="Checking current version..."
 MSG_CURRENT="Current"
@@ -347,13 +349,16 @@ pull_target_image() {
 }
 
 generate_recreate_command() {
-    docker inspect "$CONTAINER_NAME" | TARGET_IMAGE="$TARGET_IMAGE" CONTAINER_NAME="$CONTAINER_NAME" python3 - <<'PY'
+    local inspect_json
+    inspect_json=$(docker inspect "$CONTAINER_NAME")
+
+    INSPECT_JSON="$inspect_json" TARGET_IMAGE="$TARGET_IMAGE" CONTAINER_NAME="$CONTAINER_NAME" python3 <<'PY'
 import json
 import os
 import shlex
 import sys
 
-items = json.load(sys.stdin)
+items = json.loads(os.environ["INSPECT_JSON"])
 if not items:
     raise SystemExit(1)
 

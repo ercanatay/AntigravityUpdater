@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034
 
 # Antigravity Tools Updater - Linux Version
 # Supports .deb, .rpm and AppImage releases from Antigravity-Manager
@@ -45,6 +46,7 @@ DOWNLOAD_PATH=""
 declare -a LANG_CODES=("en" "tr" "de" "fr" "es" "it" "pt" "ru" "zh" "zh-TW" "ja" "ko" "ar" "nl" "pl" "sv" "no" "da" "fi" "uk" "cs" "hi" "el" "he" "th" "vi" "id" "ms" "hu" "ro" "bg" "hr" "sr" "sk" "sl" "lt" "lv" "et" "ca" "eu" "gl" "is" "fa" "sw" "af" "fil" "bn" "ta" "ur" "mi" "cy")
 declare -a LANG_NAMES=("English" "Turkce" "Deutsch" "Francais" "Espanol" "Italiano" "Portugues" "Russkiy" "Zhongwen" "Zhongwen-TW" "Nihongo" "Hangugeo" "Arabiya" "Nederlands" "Polski" "Svenska" "Norsk" "Dansk" "Suomi" "Ukrayinska" "Cestina" "Hindi" "Ellinika" "Ivrit" "Thai" "Tieng Viet" "Bahasa Indonesia" "Bahasa Melayu" "Magyar" "Romana" "Balgarski" "Hrvatski" "Srpski" "Slovencina" "Slovenscina" "Lietuviu" "Latviesu" "Eesti" "Catala" "Euskara" "Galego" "Islenska" "Farsi" "Kiswahili" "Afrikaans" "Filipino" "Bangla" "Tamil" "Urdu" "Te Reo Maori" "Cymraeg")
 
+# Default messages (overridden by locale files via source)
 MSG_TITLE="Antigravity Tools Updater"
 MSG_CHECKING_VERSION="Checking current version..."
 MSG_CURRENT="Current"
@@ -74,6 +76,7 @@ MSG_UPDATE_AVAILABLE="Update available"
 MSG_INSTALLING_DEB="Installing .deb package..."
 MSG_INSTALLING_RPM="Installing .rpm package..."
 MSG_INSTALLING_APPIMAGE="Installing AppImage..."
+MSG_CLOSING_APP="Closing current application..."
 MSG_INSTALLED_APPIMAGE="Installed AppImage"
 MSG_PATH_NOTE="Note"
 

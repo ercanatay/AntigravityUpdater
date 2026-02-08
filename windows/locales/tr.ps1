@@ -43,7 +43,7 @@ $script:MSG_SIGNATURE_OK = "Dijital imza gecerli"
 $script:MSG_SIGNATURE_WARN = "Uyari: Gecerli dijital imza bulunamadi"
 
 # Auto Update
-$script:MSG_AUTO_UPDATE_ENABLED = "Automatic updates enabled"
-$script:MSG_AUTO_UPDATE_DISABLED = "Automatic updates disabled"
-$script:MSG_AUTO_UPDATE_INVALID_FREQ = "Invalid auto-update frequency"
-$script:MSG_AUTO_UPDATE_SUPPORTED = "Supported values: hourly, every3hours, every6hours, daily, weekly, monthly"
+$script:MSG_AUTO_UPDATE_ENABLED = "Otomatik guncellemeler etkinlestirildi"
+$script:MSG_AUTO_UPDATE_DISABLED = "Otomatik guncellemeler devre disi birakildi"
+$script:MSG_AUTO_UPDATE_INVALID_FREQ = "Gecersiz otomatik guncelleme sikligi"
+$script:MSG_AUTO_UPDATE_SUPPORTED = "Desteklenen degerler: hourly, every3hours, every6hours, daily, weekly, monthly"

@@ -43,7 +43,7 @@ $script:MSG_SIGNATURE_OK = "Digital signature valid"
 $script:MSG_SIGNATURE_WARN = "Warning: No valid digital signature"
 
 # Auto Update
-$script:MSG_AUTO_UPDATE_ENABLED = "Automatic updates enabled"
-$script:MSG_AUTO_UPDATE_DISABLED = "Automatic updates disabled"
-$script:MSG_AUTO_UPDATE_INVALID_FREQ = "Invalid auto-update frequency"
-$script:MSG_AUTO_UPDATE_SUPPORTED = "Supported values: hourly, every3hours, every6hours, daily, weekly, monthly"
+$script:MSG_AUTO_UPDATE_ENABLED = "自動更新已啟用"
+$script:MSG_AUTO_UPDATE_DISABLED = "自動更新已停用"
+$script:MSG_AUTO_UPDATE_INVALID_FREQ = "無效的自動更新頻率"
+$script:MSG_AUTO_UPDATE_SUPPORTED = "支援的值: hourly, every3hours, every6hours, daily, weekly, monthly"

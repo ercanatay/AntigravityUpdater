@@ -43,7 +43,7 @@ $script:MSG_SIGNATURE_OK = "Digital signature valid"
 $script:MSG_SIGNATURE_WARN = "Warning: No valid digital signature"
 
 # Auto Update
-$script:MSG_AUTO_UPDATE_ENABLED = "Automatic updates enabled"
-$script:MSG_AUTO_UPDATE_DISABLED = "Automatic updates disabled"
-$script:MSG_AUTO_UPDATE_INVALID_FREQ = "Invalid auto-update frequency"
-$script:MSG_AUTO_UPDATE_SUPPORTED = "Supported values: hourly, every3hours, every6hours, daily, weekly, monthly"
+$script:MSG_AUTO_UPDATE_ENABLED = "Automaattiset paivitykset kaytossa"
+$script:MSG_AUTO_UPDATE_DISABLED = "Automaattiset paivitykset pois kaytosta"
+$script:MSG_AUTO_UPDATE_INVALID_FREQ = "Virheellinen automaattinen paivitystiheys"
+$script:MSG_AUTO_UPDATE_SUPPORTED = "Tuetut arvot: hourly, every3hours, every6hours, daily, weekly, monthly"

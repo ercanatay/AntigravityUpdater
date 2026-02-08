@@ -1,13 +1,14 @@
 #!/bin/bash
+# shellcheck disable=SC2034
 
 # Antigravity Tools Updater - macOS Version
 # Supports 51 languages with automatic system language detection
-# Version 1.4.3 - Security Enhanced
+# Version 1.5.0 - Security Enhanced
 
 set -eo pipefail
 
 # Version
-UPDATER_VERSION="1.4.3"
+UPDATER_VERSION="1.5.0"
 
 # Colors
 RED='\033[0;31m'
@@ -60,12 +61,15 @@ ROLLBACK=false
 SILENT=false
 NO_BACKUP=false
 PROXY_URL=""
+ENABLE_AUTO_UPDATE=false
+DISABLE_AUTO_UPDATE=false
+AUTO_UPDATE_FREQUENCY=""
 
 # Available languages (51 total)
 declare -a LANG_CODES=("en" "tr" "de" "fr" "es" "it" "pt" "ru" "zh" "zh-TW" "ja" "ko" "ar" "nl" "pl" "sv" "no" "da" "fi" "uk" "cs" "hi" "el" "he" "th" "vi" "id" "ms" "hu" "ro" "bg" "hr" "sr" "sk" "sl" "lt" "lv" "et" "ca" "eu" "gl" "is" "fa" "sw" "af" "fil" "bn" "ta" "ur" "mi" "cy")
 declare -a LANG_NAMES=("English" "Türkçe" "Deutsch" "Français" "Español" "Italiano" "Português" "Русский" "简体中文" "繁體中文" "日本語" "한국어" "العربية" "Nederlands" "Polski" "Svenska" "Norsk" "Dansk" "Suomi" "Українська" "Čeština" "हिन्दी" "Ελληνικά" "עברית" "ไทย" "Tiếng Việt" "Bahasa Indonesia" "Bahasa Melayu" "Magyar" "Română" "Български" "Hrvatski" "Srpski" "Slovenčina" "Slovenščina" "Lietuvių" "Latviešu" "Eesti" "Català" "Euskara" "Galego" "Íslenska" "فارسی" "Kiswahili" "Afrikaans" "Filipino" "বাংলা" "தமிழ்" "اردو" "Te Reo Māori" "Cymraeg")
 
-# Default messages
+# Default messages (overridden by locale files via source)
 MSG_TITLE="🚀 Antigravity Tools Updater"
 MSG_CHECKING_VERSION="📦 Checking current version..."
 MSG_CURRENT="Current"
@@ -95,7 +99,7 @@ MSG_OLD_VERSION="Old version"
 MSG_NEW_VERSION_LABEL="New version"
 MSG_API_ERROR="❌ Cannot access GitHub API"
 MSG_SELECT_LANGUAGE="Select language"
-MSG_OPENING_APP="🚀 Opening application..."
+MSG_OPENING_APP="🚀 Opening application..."  # used by locale files
 MSG_BACKUP_CREATED="✅ Backup created"
 MSG_BACKUP_FAILED="⚠️  Backup failed"
 MSG_ROLLBACK_SUCCESS="✅ Rollback successful"
@@ -106,9 +110,16 @@ MSG_HASH_OK="✅ File integrity verified"
 MSG_HASH_FAILED="❌ File integrity check failed!"
 MSG_CODESIGN_CHECK="🔐 Checking code signature..."
 MSG_CODESIGN_OK="✅ Code signature valid"
-MSG_CODESIGN_WARN="⚠️  Warning: Code signature not verified"
+MSG_CODESIGN_WARN="⚠️  Warning: Code signature not verified"  # used by locale files
+MSG_AUTO_UPDATE_ENABLED="✅ Automatic updates enabled"
+MSG_AUTO_UPDATE_DISABLED="✅ Automatic updates disabled"
+MSG_AUTO_UPDATE_INVALID_FREQ="❌ Invalid auto-update frequency"
+MSG_AUTO_UPDATE_SELECT_FREQ="Select auto-update frequency"
+MSG_AUTO_UPDATE_CURRENT="Current auto-update setting"
+MSG_AUTO_UPDATE_NOT_CONFIGURED="Not configured"
+MSG_AUTO_UPDATE_SUPPORTED="Supported values: hourly, every3hours, every6hours, daily, weekly, monthly"
 LANG_NAME="English"
-LANG_CODE="en"
+LANG_CODE="en"  # used by locale files
 
 #region Logging Functions
 
@@ -121,13 +132,15 @@ init_logging() {
 write_log() {
     local level="$1"
     local message="$2"
-    local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+    local timestamp
+    timestamp=$(date "+%Y-%m-%d %H:%M:%S")
 
     echo "[$timestamp] [$level] $message" >> "$LOG_FILE" 2>/dev/null || true
 
     # Rotate log if > 1MB
     if [[ -f "$LOG_FILE" ]]; then
-        local size=$(stat -f%z "$LOG_FILE" 2>/dev/null || echo "0")
+        local size
+        size=$(stat -f%z "$LOG_FILE" 2>/dev/null || echo "0")
         if [[ $size -gt 1048576 ]]; then
             tail -1000 "$LOG_FILE" > "$LOG_FILE.tmp" && mv "$LOG_FILE.tmp" "$LOG_FILE"
         fi
@@ -163,8 +176,10 @@ validate_path() {
     local base_path="$2"
 
     # Resolve to absolute paths
-    local resolved_path=$(cd "$(dirname "$path")" 2>/dev/null && pwd)/$(basename "$path")
-    local resolved_base=$(cd "$base_path" 2>/dev/null && pwd)
+    local resolved_path
+    resolved_path=$(cd "$(dirname "$path")" 2>/dev/null && pwd)/$(basename "$path")
+    local resolved_base
+    resolved_base=$(cd "$base_path" 2>/dev/null && pwd)
 
     # Check if path is exactly base or starts with base/
     if [[ "$resolved_path" == "$resolved_base" ]] || [[ "$resolved_path" == "$resolved_base"/* ]]; then
@@ -246,7 +261,8 @@ verify_download() {
         return 1
     fi
 
-    local file_size=$(stat -f%z "$file_path" 2>/dev/null || echo "0")
+    local file_size
+    file_size=$(stat -f%z "$file_path" 2>/dev/null || echo "0")
     if [[ $file_size -eq 0 ]]; then
         write_log "ERROR" "Downloaded file is empty: $file_path"
         return 1
@@ -258,7 +274,8 @@ verify_download() {
             echo -e "${BLUE}$MSG_HASH_VERIFY${NC}"
         fi
 
-        local actual_hash=$(get_file_hash "$file_path")
+        local actual_hash
+        actual_hash=$(get_file_hash "$file_path")
 
         if [[ "$actual_hash" != "$expected_hash" ]]; then
             if [[ "$SILENT" != true ]]; then
@@ -292,7 +309,8 @@ create_backup() {
         mkdir -p "$BACKUP_DIR"
     fi
 
-    local timestamp=$(date "+%Y%m%d_%H%M%S")
+    local timestamp
+    timestamp=$(date "+%Y%m%d_%H%M%S")
     local backup_name="backup_$timestamp"
     local backup_path="$BACKUP_DIR/$backup_name"
 
@@ -388,6 +406,7 @@ load_language() {
     fi
 
     if [[ -f "$lang_file" ]]; then
+        # shellcheck disable=SC1090
         source "$lang_file"
         write_log "INFO" "Language loaded: $lang_code"
         return 0
@@ -396,6 +415,7 @@ load_language() {
     # Fallback to English
     local en_file="$LOCALES_DIR/en.sh"
     if validate_path "$en_file" "$LOCALES_DIR" && [[ -f "$en_file" ]]; then
+        # shellcheck disable=SC1090
         source "$en_file"
         return 0
     fi
@@ -534,8 +554,82 @@ print_usage() {
     echo "  --silent            Run without prompts"
     echo "  --no-backup         Skip automatic backup"
     echo "  --proxy URL         Use proxy for connections"
+    echo "  --enable-auto-update Enable automatic update checks"
+    echo "  --disable-auto-update Disable automatic update checks"
+    echo "  --auto-update-frequency VALUE"
+    echo "                    hourly | every3hours | every6hours | daily | weekly | monthly"
     echo "  --help, -h          Show this help"
     echo ""
+}
+
+get_frequency_seconds() {
+    case "$1" in
+        hourly) echo 3600 ;;
+        every3hours) echo 10800 ;;
+        every6hours) echo 21600 ;;
+        daily) echo 86400 ;;
+        weekly) echo 604800 ;;
+        monthly) echo 2592000 ;;
+        *) return 1 ;;
+    esac
+}
+
+configure_auto_update() {
+    local launch_agents_dir="$HOME/Library/LaunchAgents"
+    local plist_path="$launch_agents_dir/com.antigravity.updater.autoupdate.plist"
+    local script_path
+    script_path="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+
+    mkdir -p "$launch_agents_dir"
+
+    if [[ "$DISABLE_AUTO_UPDATE" == true ]]; then
+        launchctl unload "$plist_path" >/dev/null 2>&1 || true
+        rm -f "$plist_path"
+        echo -e "${GREEN}$MSG_AUTO_UPDATE_DISABLED${NC}"
+        write_log "INFO" "Automatic updates disabled"
+        exit 0
+    fi
+
+    if [[ "$ENABLE_AUTO_UPDATE" == true ]]; then
+        local frequency="${AUTO_UPDATE_FREQUENCY:-daily}"
+        local seconds
+        seconds=$(get_frequency_seconds "$frequency") || {
+            echo -e "${RED}$MSG_AUTO_UPDATE_INVALID_FREQ: $frequency${NC}"
+            echo -e "${YELLOW}$MSG_AUTO_UPDATE_SUPPORTED${NC}"
+            exit 1
+        }
+
+        cat > "$plist_path" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.antigravity.updater.autoupdate</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>$script_path</string>
+        <string>--silent</string>
+    </array>
+    <key>StartInterval</key>
+    <integer>$seconds</integer>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>$LOG_FILE</string>
+    <key>StandardErrorPath</key>
+    <string>$LOG_FILE</string>
+</dict>
+</plist>
+EOF
+
+        launchctl unload "$plist_path" >/dev/null 2>&1 || true
+        launchctl load "$plist_path" >/dev/null 2>&1 || true
+        echo -e "${GREEN}$MSG_AUTO_UPDATE_ENABLED (${frequency})${NC}"
+        write_log "INFO" "Automatic updates enabled with frequency: $frequency"
+        exit 0
+    fi
 }
 
 #endregion
@@ -586,6 +680,22 @@ while [[ $# -gt 0 ]]; do
             PROXY_URL="$2"
             shift 2
             ;;
+        --enable-auto-update)
+            ENABLE_AUTO_UPDATE=true
+            shift
+            ;;
+        --disable-auto-update)
+            DISABLE_AUTO_UPDATE=true
+            shift
+            ;;
+        --auto-update-frequency)
+            if [[ $# -lt 2 ]]; then
+                echo -e "${RED}Error: --auto-update-frequency requires a value${NC}"
+                exit 1
+            fi
+            AUTO_UPDATE_FREQUENCY="$2"
+            shift 2
+            ;;
         --help|-h)
             print_usage
             exit 0
@@ -604,6 +714,10 @@ if [[ "$ROLLBACK" == true ]]; then
     else
         exit 1
     fi
+fi
+
+if [[ "$ENABLE_AUTO_UPDATE" == true ]] || [[ "$DISABLE_AUTO_UPDATE" == true ]]; then
+    configure_auto_update
 fi
 
 # Load language preference

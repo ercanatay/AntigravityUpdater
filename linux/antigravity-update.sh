@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-UPDATER_VERSION="1.4.3"
+UPDATER_VERSION="1.5.0"
 REPO_OWNER="lbjlaq"
 REPO_NAME="Antigravity-Manager"
 APP_CMD_NAME="antigravity-tools"
@@ -19,6 +19,9 @@ PROXY_URL=""
 REQUESTED_FORMAT="auto"
 CHANGE_LANGUAGE=false
 RESET_LANG=false
+ENABLE_AUTO_UPDATE=false
+DISABLE_AUTO_UPDATE=false
+AUTO_UPDATE_FREQUENCY=""
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOCALES_DIR="$SCRIPT_DIR/../locales"
@@ -73,6 +76,10 @@ MSG_RELEASE_NOTES="Release notes"
 MSG_NO_CHANGELOG="No changelog available."
 MSG_SELECTED_ASSET="Selected asset"
 MSG_UPDATE_AVAILABLE="Update available"
+MSG_AUTO_UPDATE_ENABLED="Automatic updates enabled"
+MSG_AUTO_UPDATE_DISABLED="Automatic updates disabled"
+MSG_AUTO_UPDATE_INVALID_FREQ="Invalid auto-update frequency"
+MSG_AUTO_UPDATE_SUPPORTED="Supported values: hourly, every3hours, every6hours, daily, weekly, monthly"
 MSG_INSTALLING_DEB="Installing .deb package..."
 MSG_INSTALLING_RPM="Installing .rpm package..."
 MSG_INSTALLING_APPIMAGE="Installing AppImage..."
@@ -99,6 +106,10 @@ Options:
   --silent             Run with minimal output
   --proxy URL          Use proxy for HTTP requests
   --format TYPE        auto | deb | rpm | appimage
+  --enable-auto-update Enable automatic update checks
+  --disable-auto-update Disable automatic update checks
+  --auto-update-frequency VALUE
+                       hourly | every3hours | every6hours | daily | weekly | monthly
   --help, -h           Show this help
 USAGE
 }
@@ -603,6 +614,81 @@ validate_format() {
     esac
 }
 
+get_frequency_seconds() {
+    case "$1" in
+        hourly) echo 3600 ;;
+        every3hours) echo 10800 ;;
+        every6hours) echo 21600 ;;
+        daily) echo 86400 ;;
+        weekly) echo 604800 ;;
+        monthly) echo 2592000 ;;
+        *) return 1 ;;
+    esac
+}
+
+configure_auto_update() {
+    local frequency="${AUTO_UPDATE_FREQUENCY:-daily}"
+    local seconds
+    seconds=$(get_frequency_seconds "$frequency") || {
+        echo "ERROR: $MSG_AUTO_UPDATE_INVALID_FREQ: $frequency" >&2
+        echo "$MSG_AUTO_UPDATE_SUPPORTED" >&2
+        exit 1
+    }
+
+    local systemd_user_dir="$HOME/.config/systemd/user"
+    local service_file="$systemd_user_dir/antigravity-updater.service"
+    local timer_file="$systemd_user_dir/antigravity-updater.timer"
+    local script_path
+    script_path="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+
+    mkdir -p "$systemd_user_dir"
+
+    if [[ "$DISABLE_AUTO_UPDATE" == true ]]; then
+        if command -v systemctl >/dev/null 2>&1; then
+            systemctl --user disable --now antigravity-updater.timer >/dev/null 2>&1 || true
+            systemctl --user daemon-reload >/dev/null 2>&1 || true
+        fi
+        rm -f "$service_file" "$timer_file"
+        print_msg "$MSG_AUTO_UPDATE_DISABLED"
+        write_log "INFO" "Automatic updates disabled"
+        exit 0
+    fi
+
+    cat > "$service_file" <<EOF
+[Unit]
+Description=Antigravity Updater automatic update check
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/env bash $script_path --silent
+EOF
+
+    cat > "$timer_file" <<EOF
+[Unit]
+Description=Run Antigravity Updater automatic checks
+
+[Timer]
+OnBootSec=5m
+OnUnitActiveSec=${seconds}
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    if ! command -v systemctl >/dev/null 2>&1; then
+        echo "ERROR: systemctl is required to manage auto-update timer." >&2
+        exit 1
+    fi
+
+    systemctl --user daemon-reload
+    systemctl --user enable --now antigravity-updater.timer
+
+    print_msg "$MSG_AUTO_UPDATE_ENABLED ($frequency)"
+    write_log "INFO" "Automatic updates enabled with frequency: $frequency"
+    exit 0
+}
+
 main() {
     init_logging
     write_log "INFO" "=== Linux updater started v$UPDATER_VERSION ==="
@@ -640,6 +726,20 @@ main() {
                 REQUESTED_FORMAT="$2"
                 shift
                 ;;
+            --enable-auto-update)
+                ENABLE_AUTO_UPDATE=true
+                ;;
+            --disable-auto-update)
+                DISABLE_AUTO_UPDATE=true
+                ;;
+            --auto-update-frequency)
+                if [[ $# -lt 2 ]]; then
+                    echo "ERROR: --auto-update-frequency requires a value" >&2
+                    exit 1
+                fi
+                AUTO_UPDATE_FREQUENCY="$2"
+                shift
+                ;;
             --help|-h)
                 print_usage
                 exit 0
@@ -652,6 +752,10 @@ main() {
         esac
         shift
     done
+
+    if [[ "$ENABLE_AUTO_UPDATE" == true ]] || [[ "$DISABLE_AUTO_UPDATE" == true ]]; then
+        configure_auto_update
+    fi
 
     if [[ "$RESET_LANG" == true ]]; then
         rm -f "$LANG_PREF_FILE"

@@ -1,7 +1,7 @@
 # Antigravity Tools Updater - Windows Version
 # Supports Windows 10/11 64-bit (including Bootcamp)
 # Supports 51 languages with automatic system language detection
-# Version 1.4.3 - Security Enhanced
+# Version 1.5.0 - Security Enhanced
 
 param(
     [switch]$Lang,
@@ -13,6 +13,9 @@ param(
     [switch]$Silent,
     [switch]$NoBackup,
     [string]$ProxyUrl = "",
+    [switch]$EnableAutoUpdate,
+    [switch]$DisableAutoUpdate,
+    [ValidateSet("hourly", "every3hours", "every6hours", "daily", "weekly", "monthly")][string]$AutoUpdateFrequency = "",
     [switch]$Help
 )
 
@@ -21,7 +24,7 @@ param(
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
 # Version
-$UPDATER_VERSION = "1.4.3"
+$UPDATER_VERSION = "1.5.0"
 
 # Settings
 $REPO_OWNER = "lbjlaq"
@@ -88,6 +91,9 @@ $script:MSG_HASH_OK = "File integrity verified"
 $script:MSG_SIGNATURE_CHECK = "Checking digital signature..."
 $script:MSG_SIGNATURE_OK = "Digital signature valid"
 $script:MSG_SIGNATURE_WARN = "Warning: No valid digital signature"
+$script:MSG_AUTO_UPDATE_ENABLED = "Automatic updates enabled"
+$script:MSG_AUTO_UPDATE_DISABLED = "Automatic updates disabled"
+$script:MSG_AUTO_UPDATE_INVALID_FREQ = "Invalid auto-update frequency"
 $script:LANG_NAME = "English"
 $script:LANG_CODE = "en"
 
@@ -691,8 +697,72 @@ function Show-Help {
     Write-Host "  -Silent            Run without prompts"
     Write-Host "  -NoBackup          Skip automatic backup"
     Write-Host "  -ProxyUrl <url>    Use proxy for connections"
+    Write-Host "  -EnableAutoUpdate  Enable automatic update checks"
+    Write-Host "  -DisableAutoUpdate Disable automatic update checks"
+    Write-Host "  -AutoUpdateFrequency <value> hourly | every3hours | every6hours | daily | weekly | monthly"
     Write-Host "  -Help              Show this help"
     Write-Host ""
+}
+
+#endregion
+
+#region Auto Update Configuration
+
+function Get-AutoUpdateMinutes {
+    param([string]$Frequency)
+
+    switch ($Frequency) {
+        "hourly" { return 60 }
+        "every3hours" { return 180 }
+        "every6hours" { return 360 }
+        "daily" { return 1440 }
+        "weekly" { return 10080 }
+        "monthly" { return 43200 }
+        default { return $null }
+    }
+}
+
+function Set-AutoUpdateTask {
+    param(
+        [switch]$Enable,
+        [switch]$Disable,
+        [string]$Frequency
+    )
+
+    $taskName = "AntigravityUpdater-AutoUpdate"
+
+    if ($Disable) {
+        try {
+            Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
+        } catch {}
+        Write-ColorOutput $script:MSG_AUTO_UPDATE_DISABLED "Green"
+        Write-Log "Automatic updates disabled" "INFO"
+        exit 0
+    }
+
+    if (-not $Enable) {
+        return
+    }
+
+    if (-not $Frequency) {
+        $Frequency = "daily"
+    }
+
+    $minutes = Get-AutoUpdateMinutes -Frequency $Frequency
+    if (-not $minutes) {
+        Write-ColorOutput "$($script:MSG_AUTO_UPDATE_INVALID_FREQ): $Frequency" "Red"
+        exit 1
+    }
+
+    $scriptPath = $MyInvocation.MyCommand.Path
+    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`" -Silent"
+    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Minutes $minutes) -RepetitionDuration ([TimeSpan]::MaxValue)
+    $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
+
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null
+    Write-ColorOutput "$($script:MSG_AUTO_UPDATE_ENABLED) ($Frequency)" "Green"
+    Write-Log "Automatic updates enabled with frequency: $Frequency" "INFO"
+    exit 0
 }
 
 #endregion
@@ -708,6 +778,8 @@ if ($Help) {
     Show-Help
     exit 0
 }
+
+Set-AutoUpdateTask -Enable:$EnableAutoUpdate -Disable:$DisableAutoUpdate -Frequency:$AutoUpdateFrequency
 
 # Handle rollback
 if ($Rollback) {

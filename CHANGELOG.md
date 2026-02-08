@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-02-08
+
+### Added
+- Added opt-in automatic update scheduling for all updater targets:
+  - macOS (`antigravity-update.sh`)
+  - Windows (`windows/antigravity-update.ps1`)
+  - Linux (`linux/antigravity-update.sh`)
+  - Docker (`docker/antigravity-docker-update.sh`)
+- Added schedule frequency selection options:
+  - `hourly`
+  - `every3hours`
+  - `every6hours`
+  - `daily`
+  - `weekly`
+  - `monthly`
+- Added enable/disable auto-update CLI options to all platform updaters.
+- Added new auto-update locale message keys to all shell and PowerShell language files.
+
+### Changed
+- Updated `README.md` feature matrix and command reference with automatic update scheduling.
+- Bumped updater metadata and badges to `1.5.0`.
+
 ## [1.4.3] - 2026-02-07
 
 ### Added

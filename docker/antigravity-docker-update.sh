@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-UPDATER_VERSION="1.4.3"
+UPDATER_VERSION="1.5.0"
 REPO_OWNER="lbjlaq"
 REPO_NAME="Antigravity-Manager"
 DEFAULT_IMAGE_REPO="lbjlaq/antigravity-manager"
@@ -23,6 +23,9 @@ CONTAINER_NAME="$DEFAULT_CONTAINER_NAME"
 TAG_OVERRIDE=""
 CHANGE_LANGUAGE=false
 RESET_LANG=false
+ENABLE_AUTO_UPDATE=false
+DISABLE_AUTO_UPDATE=false
+AUTO_UPDATE_FREQUENCY=""
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOCALES_DIR="$SCRIPT_DIR/../locales"
@@ -78,6 +81,10 @@ MSG_DOCKER_NOT_INSTALLED="Docker is not installed"
 MSG_DOCKER_DAEMON_UNAVAILABLE="Docker daemon is not reachable"
 MSG_NO_ACTION="No action needed"
 MSG_UPDATE_AVAILABLE="Update available"
+MSG_AUTO_UPDATE_ENABLED="Automatic updates enabled"
+MSG_AUTO_UPDATE_DISABLED="Automatic updates disabled"
+MSG_AUTO_UPDATE_INVALID_FREQ="Invalid auto-update frequency"
+MSG_AUTO_UPDATE_SUPPORTED="Supported values: hourly, every3hours, every6hours, daily, weekly, monthly"
 
 cleanup() {
     rm -rf "$TEMP_DIR"
@@ -101,6 +108,9 @@ Options:
   --tag TAG                    Override tag (default: latest GitHub release tag)
   --proxy URL                  Proxy for GitHub API requests
   --silent                     Run with minimal output
+  --enable-auto-update          Enable automatic update checks
+  --disable-auto-update         Disable automatic update checks
+  --auto-update-frequency VALUE hourly | every3hours | every6hours | daily | weekly | monthly
   --help, -h                   Show this help
 USAGE
 }
@@ -547,6 +557,81 @@ run_check_only() {
     fi
 }
 
+get_frequency_seconds() {
+    case "$1" in
+        hourly) echo 3600 ;;
+        every3hours) echo 10800 ;;
+        every6hours) echo 21600 ;;
+        daily) echo 86400 ;;
+        weekly) echo 604800 ;;
+        monthly) echo 2592000 ;;
+        *) return 1 ;;
+    esac
+}
+
+configure_auto_update() {
+    local frequency="${AUTO_UPDATE_FREQUENCY:-daily}"
+    local seconds
+    seconds=$(get_frequency_seconds "$frequency") || {
+        echo "ERROR: $MSG_AUTO_UPDATE_INVALID_FREQ: $frequency" >&2
+        echo "$MSG_AUTO_UPDATE_SUPPORTED" >&2
+        exit 1
+    }
+
+    local systemd_user_dir="$HOME/.config/systemd/user"
+    local service_file="$systemd_user_dir/antigravity-docker-updater.service"
+    local timer_file="$systemd_user_dir/antigravity-docker-updater.timer"
+    local script_path
+    script_path="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+
+    mkdir -p "$systemd_user_dir"
+
+    if [[ "$DISABLE_AUTO_UPDATE" == true ]]; then
+        if command -v systemctl >/dev/null 2>&1; then
+            systemctl --user disable --now antigravity-docker-updater.timer >/dev/null 2>&1 || true
+            systemctl --user daemon-reload >/dev/null 2>&1 || true
+        fi
+        rm -f "$service_file" "$timer_file"
+        print_msg "$MSG_AUTO_UPDATE_DISABLED"
+        write_log "INFO" "Docker automatic updates disabled"
+        exit 0
+    fi
+
+    cat > "$service_file" <<EOF
+[Unit]
+Description=Antigravity Docker updater automatic update check
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/env bash $script_path --silent
+EOF
+
+    cat > "$timer_file" <<EOF
+[Unit]
+Description=Run Antigravity Docker updater automatic checks
+
+[Timer]
+OnBootSec=5m
+OnUnitActiveSec=${seconds}
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    if ! command -v systemctl >/dev/null 2>&1; then
+        echo "ERROR: systemctl is required to manage auto-update timer." >&2
+        exit 1
+    fi
+
+    systemctl --user daemon-reload
+    systemctl --user enable --now antigravity-docker-updater.timer
+
+    print_msg "$MSG_AUTO_UPDATE_ENABLED ($frequency)"
+    write_log "INFO" "Docker automatic updates enabled with frequency: $frequency"
+    exit 0
+}
+
 main() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -600,6 +685,20 @@ main() {
             --silent)
                 SILENT=true
                 ;;
+            --enable-auto-update)
+                ENABLE_AUTO_UPDATE=true
+                ;;
+            --disable-auto-update)
+                DISABLE_AUTO_UPDATE=true
+                ;;
+            --auto-update-frequency)
+                if [[ $# -lt 2 ]]; then
+                    echo "ERROR: --auto-update-frequency requires a value" >&2
+                    exit 1
+                fi
+                AUTO_UPDATE_FREQUENCY="$2"
+                shift
+                ;;
             --help|-h)
                 print_usage
                 exit 0
@@ -614,6 +713,10 @@ main() {
     done
 
     init_logging
+
+    if [[ "$ENABLE_AUTO_UPDATE" == true ]] || [[ "$DISABLE_AUTO_UPDATE" == true ]]; then
+        configure_auto_update
+    fi
 
     if [[ "$RESET_LANG" == true ]]; then
         rm -f "$LANG_PREF_FILE"

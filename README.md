@@ -5,7 +5,7 @@ Unofficial update scripts for [Antigravity Tools](https://github.com/lbjlaq/Anti
 > This repository **does not include the Antigravity Tools application**. It only includes updater tools.
 
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux%20%7C%20Docker-blue)
-![Updater Release](https://img.shields.io/badge/updater-1.4.3-green)
+![Updater Release](https://img.shields.io/badge/updater-1.5.0-green)
 ![Languages](https://img.shields.io/badge/languages-51-orange)
 ![License](https://img.shields.io/badge/license-MIT-brightgreen)
 
@@ -61,6 +61,8 @@ The updaters in this repository:
 | Proxy support | ✅ | ✅ | ✅ | ✅ |
 | Silent mode | ✅ | ✅ | ✅ | ✅ |
 | Changelog display | ✅ | ✅ | ✅ | ✅ |
+| Automatic update scheduling (opt-in) | ✅ | ✅ | ✅ | ✅ |
+| User-selectable schedule frequency | ✅ | ✅ | ✅ | ✅ |
 | Pre-update backup | ✅ | ✅ | ❌ | ❌ |
 | Rollback | ✅ | ✅ | ❌ | ❌ |
 | Package type selection | ❌ | ❌ | ✅ | ❌ |
@@ -155,6 +157,10 @@ chmod +x docker/antigravity-docker-update.sh
 --silent            Minimize interaction
 --no-backup         Skip creating a backup before update
 --proxy URL         Use HTTP(S) proxy
+--enable-auto-update Enable automatic update checks
+--disable-auto-update Disable automatic update checks
+--auto-update-frequency VALUE
+                    hourly | every3hours | every6hours | daily | weekly | monthly
 --help, -h          Show help
 ```
 
@@ -170,6 +176,10 @@ chmod +x docker/antigravity-docker-update.sh
 -Silent             Minimize interaction
 -NoBackup           Skip creating a backup before update
 -ProxyUrl <url>     Use proxy
+-EnableAutoUpdate   Enable automatic update checks
+-DisableAutoUpdate  Disable automatic update checks
+-AutoUpdateFrequency <value>
+                    hourly | every3hours | every6hours | daily | weekly | monthly
 -Help               Show help
 ```
 
@@ -183,6 +193,10 @@ chmod +x docker/antigravity-docker-update.sh
 --silent            Minimize interaction
 --proxy URL         Use HTTP(S) proxy
 --format TYPE       auto | deb | rpm | appimage
+--enable-auto-update Enable automatic update checks
+--disable-auto-update Disable automatic update checks
+--auto-update-frequency VALUE
+                    hourly | every3hours | every6hours | daily | weekly | monthly
 --help, -h          Show help
 ```
 
@@ -199,7 +213,36 @@ chmod +x docker/antigravity-docker-update.sh
 --tag TAG                    Set target tag manually (default: latest release tag)
 --proxy URL                  Proxy for GitHub API requests
 --silent                     Minimize interaction
+--enable-auto-update         Enable automatic update checks
+--disable-auto-update        Disable automatic update checks
+--auto-update-frequency VALUE
+                            hourly | every3hours | every6hours | daily | weekly | monthly
 --help, -h                   Show help
+```
+
+
+
+### Automatic Update Scheduling (English)
+
+All platform updaters now support optional automatic update checks. You can enable or disable this behavior and choose frequency:
+
+- `hourly`
+- `every3hours`
+- `every6hours`
+- `daily`
+- `weekly`
+- `monthly`
+
+Examples:
+
+```bash
+./antigravity-update.sh --enable-auto-update --auto-update-frequency weekly
+./linux/antigravity-update.sh --enable-auto-update --auto-update-frequency daily
+./docker/antigravity-docker-update.sh --enable-auto-update --auto-update-frequency every6hours
+```
+
+```powershell
+.\antigravity-update.ps1 -EnableAutoUpdate -AutoUpdateFrequency monthly
 ```
 
 ## Common Scenarios

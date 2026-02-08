@@ -2,7 +2,7 @@
 ; Windows 10/11 64-bit Installer
 
 #define MyAppName "Antigravity Tools Updater"
-#define MyAppVersion "1.4.3"
+#define MyAppVersion "1.5.0"
 #define MyAppPublisher "Ercan ATAY"
 #define MyAppURL "https://github.com/ercanatay/AntigravityUpdater"
 #define MyAppExeName "AntigravityUpdater.bat"

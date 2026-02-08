@@ -46,3 +46,9 @@ MSG_HASH_FAILED="❌ Dosya bütünlük kontrolü başarısız!"
 MSG_CODESIGN_CHECK="🔐 Kod imzası kontrol ediliyor..."
 MSG_CODESIGN_OK="✅ Kod imzası geçerli"
 MSG_CODESIGN_WARN="⚠️  Uyarı: Kod imzası doğrulanamadı"
+
+# Auto Update
+MSG_AUTO_UPDATE_ENABLED="✅ Automatic updates enabled"
+MSG_AUTO_UPDATE_DISABLED="✅ Automatic updates disabled"
+MSG_AUTO_UPDATE_INVALID_FREQ="❌ Invalid auto-update frequency"
+MSG_AUTO_UPDATE_SUPPORTED="Supported values: hourly, every3hours, every6hours, daily, weekly, monthly"

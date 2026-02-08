@@ -3,12 +3,12 @@
 
 # Antigravity Tools Updater - macOS Version
 # Supports 51 languages with automatic system language detection
-# Version 1.4.3 - Security Enhanced
+# Version 1.5.0 - Security Enhanced
 
 set -eo pipefail
 
 # Version
-UPDATER_VERSION="1.4.3"
+UPDATER_VERSION="1.5.0"
 
 # Colors
 RED='\033[0;31m'
@@ -61,6 +61,9 @@ ROLLBACK=false
 SILENT=false
 NO_BACKUP=false
 PROXY_URL=""
+ENABLE_AUTO_UPDATE=false
+DISABLE_AUTO_UPDATE=false
+AUTO_UPDATE_FREQUENCY=""
 
 # Available languages (51 total)
 declare -a LANG_CODES=("en" "tr" "de" "fr" "es" "it" "pt" "ru" "zh" "zh-TW" "ja" "ko" "ar" "nl" "pl" "sv" "no" "da" "fi" "uk" "cs" "hi" "el" "he" "th" "vi" "id" "ms" "hu" "ro" "bg" "hr" "sr" "sk" "sl" "lt" "lv" "et" "ca" "eu" "gl" "is" "fa" "sw" "af" "fil" "bn" "ta" "ur" "mi" "cy")
@@ -108,6 +111,13 @@ MSG_HASH_FAILED="❌ File integrity check failed!"
 MSG_CODESIGN_CHECK="🔐 Checking code signature..."
 MSG_CODESIGN_OK="✅ Code signature valid"
 MSG_CODESIGN_WARN="⚠️  Warning: Code signature not verified"  # used by locale files
+MSG_AUTO_UPDATE_ENABLED="✅ Automatic updates enabled"
+MSG_AUTO_UPDATE_DISABLED="✅ Automatic updates disabled"
+MSG_AUTO_UPDATE_INVALID_FREQ="❌ Invalid auto-update frequency"
+MSG_AUTO_UPDATE_SELECT_FREQ="Select auto-update frequency"
+MSG_AUTO_UPDATE_CURRENT="Current auto-update setting"
+MSG_AUTO_UPDATE_NOT_CONFIGURED="Not configured"
+MSG_AUTO_UPDATE_SUPPORTED="Supported values: hourly, every3hours, every6hours, daily, weekly, monthly"
 LANG_NAME="English"
 LANG_CODE="en"  # used by locale files
 
@@ -544,8 +554,82 @@ print_usage() {
     echo "  --silent            Run without prompts"
     echo "  --no-backup         Skip automatic backup"
     echo "  --proxy URL         Use proxy for connections"
+    echo "  --enable-auto-update Enable automatic update checks"
+    echo "  --disable-auto-update Disable automatic update checks"
+    echo "  --auto-update-frequency VALUE"
+    echo "                    hourly | every3hours | every6hours | daily | weekly | monthly"
     echo "  --help, -h          Show this help"
     echo ""
+}
+
+get_frequency_seconds() {
+    case "$1" in
+        hourly) echo 3600 ;;
+        every3hours) echo 10800 ;;
+        every6hours) echo 21600 ;;
+        daily) echo 86400 ;;
+        weekly) echo 604800 ;;
+        monthly) echo 2592000 ;;
+        *) return 1 ;;
+    esac
+}
+
+configure_auto_update() {
+    local launch_agents_dir="$HOME/Library/LaunchAgents"
+    local plist_path="$launch_agents_dir/com.antigravity.updater.autoupdate.plist"
+    local script_path
+    script_path="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+
+    mkdir -p "$launch_agents_dir"
+
+    if [[ "$DISABLE_AUTO_UPDATE" == true ]]; then
+        launchctl unload "$plist_path" >/dev/null 2>&1 || true
+        rm -f "$plist_path"
+        echo -e "${GREEN}$MSG_AUTO_UPDATE_DISABLED${NC}"
+        write_log "INFO" "Automatic updates disabled"
+        exit 0
+    fi
+
+    if [[ "$ENABLE_AUTO_UPDATE" == true ]]; then
+        local frequency="${AUTO_UPDATE_FREQUENCY:-daily}"
+        local seconds
+        seconds=$(get_frequency_seconds "$frequency") || {
+            echo -e "${RED}$MSG_AUTO_UPDATE_INVALID_FREQ: $frequency${NC}"
+            echo -e "${YELLOW}$MSG_AUTO_UPDATE_SUPPORTED${NC}"
+            exit 1
+        }
+
+        cat > "$plist_path" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.antigravity.updater.autoupdate</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>$script_path</string>
+        <string>--silent</string>
+    </array>
+    <key>StartInterval</key>
+    <integer>$seconds</integer>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>$LOG_FILE</string>
+    <key>StandardErrorPath</key>
+    <string>$LOG_FILE</string>
+</dict>
+</plist>
+EOF
+
+        launchctl unload "$plist_path" >/dev/null 2>&1 || true
+        launchctl load "$plist_path" >/dev/null 2>&1 || true
+        echo -e "${GREEN}$MSG_AUTO_UPDATE_ENABLED (${frequency})${NC}"
+        write_log "INFO" "Automatic updates enabled with frequency: $frequency"
+        exit 0
+    fi
 }
 
 #endregion
@@ -596,6 +680,22 @@ while [[ $# -gt 0 ]]; do
             PROXY_URL="$2"
             shift 2
             ;;
+        --enable-auto-update)
+            ENABLE_AUTO_UPDATE=true
+            shift
+            ;;
+        --disable-auto-update)
+            DISABLE_AUTO_UPDATE=true
+            shift
+            ;;
+        --auto-update-frequency)
+            if [[ $# -lt 2 ]]; then
+                echo -e "${RED}Error: --auto-update-frequency requires a value${NC}"
+                exit 1
+            fi
+            AUTO_UPDATE_FREQUENCY="$2"
+            shift 2
+            ;;
         --help|-h)
             print_usage
             exit 0
@@ -614,6 +714,10 @@ if [[ "$ROLLBACK" == true ]]; then
     else
         exit 1
     fi
+fi
+
+if [[ "$ENABLE_AUTO_UPDATE" == true ]] || [[ "$DISABLE_AUTO_UPDATE" == true ]]; then
+    configure_auto_update
 fi
 
 # Load language preference

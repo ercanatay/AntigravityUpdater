@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-02-08
+
+### Fixed
+- macOS updater now skips `version_gt` comparisons when `CURRENT_VERSION` is non-numeric, preventing false "already up to date" results during fresh installs.
+- Linux updater now applies the same non-numeric version guard before semantic version comparison.
+- Bundled `.app` updater script now mirrors the macOS guard logic for consistent behavior.
+
+### Changed
+- Bumped updater metadata and badges to `1.6.1`.
+
 ## [1.6.0] - 2026-02-08
 
 ### Added

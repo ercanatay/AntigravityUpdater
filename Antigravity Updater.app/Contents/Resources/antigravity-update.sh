@@ -3,12 +3,12 @@
 
 # Antigravity Tools Updater - macOS Version
 # Supports 51 languages with automatic system language detection
-# Version 1.6.0 - Security Enhanced
+# Version 1.6.1 - Security Enhanced
 
 set -eo pipefail
 
 # Version
-UPDATER_VERSION="1.6.0"
+UPDATER_VERSION="1.6.1"
 
 # Colors
 RED='\033[0;31m'

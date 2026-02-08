@@ -30,7 +30,7 @@ MSG_UPDATE_SUCCESS="✅ GÜNCELLEME BAŞARIYLA TAMAMLANDI!"
 MSG_OLD_VERSION="Eski sürüm"
 MSG_NEW_VERSION_LABEL="Yeni sürüm"
 MSG_API_ERROR="❌ GitHub API'ye erişilemedi"
-MSG_SELECT_LANGUAGE="Dil seçin / Select language"
+MSG_SELECT_LANGUAGE="Dil seçin"
 MSG_OPENING_APP="🚀 Uygulama açılıyor..."
 # Backup & Rollback
 MSG_BACKUP_CREATED="✅ Yedek oluşturuldu"

@@ -30,7 +30,7 @@ MSG_UPDATE_SUCCESS="✅ UPDATE COMPLETED SUCCESSFULLY!"
 MSG_OLD_VERSION="Old version"
 MSG_NEW_VERSION_LABEL="New version"
 MSG_API_ERROR="❌ Cannot access GitHub API"
-MSG_SELECT_LANGUAGE="Select language"
+MSG_SELECT_LANGUAGE="Select a language"
 MSG_OPENING_APP="🚀 Opening application..."
 # Backup & Rollback
 MSG_BACKUP_CREATED="✅ Backup created"

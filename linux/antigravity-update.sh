@@ -811,10 +811,16 @@ main() {
         print_msg ""
     fi
 
-    if [[ "$CURRENT_VERSION" == "$LATEST_VERSION" ]] || ! version_gt "$LATEST_VERSION" "$CURRENT_VERSION"; then
-        print_msg "$MSG_ALREADY_LATEST"
-        write_log "INFO" "Already on latest version (Current: $CURRENT_VERSION, Latest: $LATEST_VERSION)"
-        exit 0
+    # Only compare versions when current version looks like a valid version number;
+    # otherwise (e.g. "Not installed") always proceed with the update.
+    if [[ "$CURRENT_VERSION" =~ ^[0-9]+(\.[0-9]+)* ]]; then
+        if [[ "$CURRENT_VERSION" == "$LATEST_VERSION" ]] || ! version_gt "$LATEST_VERSION" "$CURRENT_VERSION"; then
+            print_msg "$MSG_ALREADY_LATEST"
+            write_log "INFO" "Already on latest version (Current: $CURRENT_VERSION, Latest: $LATEST_VERSION)"
+            exit 0
+        fi
+    else
+        write_log "INFO" "Current version is not numeric ('$CURRENT_VERSION'), proceeding with update"
     fi
 
     if [[ "$CHECK_ONLY" == true ]]; then

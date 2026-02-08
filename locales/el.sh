@@ -48,7 +48,7 @@ MSG_CODESIGN_OK="✅ Code signature valid"
 MSG_CODESIGN_WARN="⚠️  Warning: Code signature not verified"
 
 # Auto Update
-MSG_AUTO_UPDATE_ENABLED="✅ Automatic updates enabled"
-MSG_AUTO_UPDATE_DISABLED="✅ Automatic updates disabled"
-MSG_AUTO_UPDATE_INVALID_FREQ="❌ Invalid auto-update frequency"
-MSG_AUTO_UPDATE_SUPPORTED="Supported values: hourly, every3hours, every6hours, daily, weekly, monthly"
+MSG_AUTO_UPDATE_ENABLED="✅ Οι αυτόματες ενημερώσεις ενεργοποιήθηκαν"
+MSG_AUTO_UPDATE_DISABLED="✅ Οι αυτόματες ενημερώσεις απενεργοποιήθηκαν"
+MSG_AUTO_UPDATE_INVALID_FREQ="❌ Μη έγκυρη συχνότητα αυτόματης ενημέρωσης"
+MSG_AUTO_UPDATE_SUPPORTED="Υποστηριζόμενες τιμές: hourly, every3hours, every6hours, daily, weekly, monthly"

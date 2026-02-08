@@ -48,7 +48,7 @@ MSG_CODESIGN_OK="✅ Code signature valid"
 MSG_CODESIGN_WARN="⚠️  Warning: Code signature not verified"
 
 # Auto Update
-MSG_AUTO_UPDATE_ENABLED="✅ Automatic updates enabled"
-MSG_AUTO_UPDATE_DISABLED="✅ Automatic updates disabled"
-MSG_AUTO_UPDATE_INVALID_FREQ="❌ Invalid auto-update frequency"
-MSG_AUTO_UPDATE_SUPPORTED="Supported values: hourly, every3hours, every6hours, daily, weekly, monthly"
+MSG_AUTO_UPDATE_ENABLED="✅ Samodejne posodobitve omogočene"
+MSG_AUTO_UPDATE_DISABLED="✅ Samodejne posodobitve onemogočene"
+MSG_AUTO_UPDATE_INVALID_FREQ="❌ Neveljavna pogostost samodejnega posodabljanja"
+MSG_AUTO_UPDATE_SUPPORTED="Podprte vrednosti: hourly, every3hours, every6hours, daily, weekly, monthly"

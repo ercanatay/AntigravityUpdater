@@ -48,7 +48,7 @@ MSG_CODESIGN_OK="✅ Code signature valid"
 MSG_CODESIGN_WARN="⚠️  Warning: Code signature not verified"
 
 # Auto Update
-MSG_AUTO_UPDATE_ENABLED="✅ Automatic updates enabled"
-MSG_AUTO_UPDATE_DISABLED="✅ Automatic updates disabled"
-MSG_AUTO_UPDATE_INVALID_FREQ="❌ Invalid auto-update frequency"
-MSG_AUTO_UPDATE_SUPPORTED="Supported values: hourly, every3hours, every6hours, daily, weekly, monthly"
+MSG_AUTO_UPDATE_ENABLED="✅ தானியங்கி புதுப்பிப்புகள் இயக்கப்பட்டன"
+MSG_AUTO_UPDATE_DISABLED="✅ தானியங்கி புதுப்பிப்புகள் முடக்கப்பட்டன"
+MSG_AUTO_UPDATE_INVALID_FREQ="❌ தவறான தானியங்கி புதுப்பிப்பு அதிர்வெண்"
+MSG_AUTO_UPDATE_SUPPORTED="ஆதரிக்கப்படும் மதிப்புகள்: hourly, every3hours, every6hours, daily, weekly, monthly"

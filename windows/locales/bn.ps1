@@ -43,7 +43,7 @@ $script:MSG_SIGNATURE_OK = "Digital signature valid"
 $script:MSG_SIGNATURE_WARN = "Warning: No valid digital signature"
 
 # Auto Update
-$script:MSG_AUTO_UPDATE_ENABLED = "Automatic updates enabled"
-$script:MSG_AUTO_UPDATE_DISABLED = "Automatic updates disabled"
-$script:MSG_AUTO_UPDATE_INVALID_FREQ = "Invalid auto-update frequency"
-$script:MSG_AUTO_UPDATE_SUPPORTED = "Supported values: hourly, every3hours, every6hours, daily, weekly, monthly"
+$script:MSG_AUTO_UPDATE_ENABLED = "স্বয়ংক্রিয় আপডেট সক্রিয় করা হয়েছে"
+$script:MSG_AUTO_UPDATE_DISABLED = "স্বয়ংক্রিয় আপডেট নিষ্ক্রিয় করা হয়েছে"
+$script:MSG_AUTO_UPDATE_INVALID_FREQ = "অবৈধ স্বয়ংক্রিয় আপডেট ফ্রিকোয়েন্সি"
+$script:MSG_AUTO_UPDATE_SUPPORTED = "সমর্থিত মান: hourly, every3hours, every6hours, daily, weekly, monthly"

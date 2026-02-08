@@ -48,7 +48,7 @@ MSG_CODESIGN_OK="✅ Kod imzası geçerli"
 MSG_CODESIGN_WARN="⚠️  Uyarı: Kod imzası doğrulanamadı"
 
 # Auto Update
-MSG_AUTO_UPDATE_ENABLED="✅ Automatic updates enabled"
-MSG_AUTO_UPDATE_DISABLED="✅ Automatic updates disabled"
-MSG_AUTO_UPDATE_INVALID_FREQ="❌ Invalid auto-update frequency"
-MSG_AUTO_UPDATE_SUPPORTED="Supported values: hourly, every3hours, every6hours, daily, weekly, monthly"
+MSG_AUTO_UPDATE_ENABLED="✅ Otomatik güncellemeler etkinleştirildi"
+MSG_AUTO_UPDATE_DISABLED="✅ Otomatik güncellemeler devre dışı bırakıldı"
+MSG_AUTO_UPDATE_INVALID_FREQ="❌ Geçersiz otomatik güncelleme sıklığı"
+MSG_AUTO_UPDATE_SUPPORTED="Desteklenen değerler: hourly, every3hours, every6hours, daily, weekly, monthly"

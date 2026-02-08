@@ -48,7 +48,7 @@ MSG_CODESIGN_OK="✅ Code signature valid"
 MSG_CODESIGN_WARN="⚠️  Warning: Code signature not verified"
 
 # Auto Update
-MSG_AUTO_UPDATE_ENABLED="✅ Automatic updates enabled"
-MSG_AUTO_UPDATE_DISABLED="✅ Automatic updates disabled"
-MSG_AUTO_UPDATE_INVALID_FREQ="❌ Invalid auto-update frequency"
-MSG_AUTO_UPDATE_SUPPORTED="Supported values: hourly, every3hours, every6hours, daily, weekly, monthly"
+MSG_AUTO_UPDATE_ENABLED="✅ Kua whakahohea ngā whakahōutanga aunoa"
+MSG_AUTO_UPDATE_DISABLED="✅ Kua whakakore ngā whakahōutanga aunoa"
+MSG_AUTO_UPDATE_INVALID_FREQ="❌ He auau whakahōutanga aunoa muhu"
+MSG_AUTO_UPDATE_SUPPORTED="Ngā uara e tautokohia ana: hourly, every3hours, every6hours, daily, weekly, monthly"

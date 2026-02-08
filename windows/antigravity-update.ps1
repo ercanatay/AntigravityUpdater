@@ -754,7 +754,7 @@ function Set-AutoUpdateTask {
         exit 1
     }
 
-    $scriptPath = $MyInvocation.MyCommand.Path
+    $scriptPath = $PSCommandPath
     $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`" -Silent"
     $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Minutes $minutes) -RepetitionDuration ([TimeSpan]::MaxValue)
     $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited

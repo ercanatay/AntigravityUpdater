@@ -3,7 +3,7 @@
 
 # Antigravity Tools Updater - macOS Version
 # Supports 51 languages with automatic system language detection
-# Version 1.6.2 - Security Enhanced
+# Version 1.6.3 - Security Enhanced
 
 set -eo pipefail
 

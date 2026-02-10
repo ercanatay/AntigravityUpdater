@@ -284,12 +284,13 @@ fetch_latest_release_tag() {
     fi
 
     # Securely parse JSON without eval by separating fields with newlines
-    local RELEASE_DATA=$(printf '%s' "$release_info" | python3 -c "import sys, json; data=json.load(sys.stdin); print((data.get('tag_name') or '').lstrip('v')); print(data.get('body') or '')" 2>/dev/null || true)
+    local release_data
+    release_data=$(printf '%s' "$release_info" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('tag_name') or ''); print(data.get('body') or '')" 2>/dev/null || true)
 
-    local LATEST_RELEASE_TAG=$(echo "$RELEASE_DATA" | head -n1)
-    local LATEST_RELEASE_BODY=$(echo "$RELEASE_DATA" | tail -n+2)
+    LATEST_RELEASE_TAG=$(echo "$release_data" | head -n1)
+    LATEST_RELEASE_BODY=$(echo "$release_data" | tail -n+2)
 
-    if [[ -z "$LATEST_RELEASE_TAG" ]]; then
+    if [[ -z "$LATEST_RELEASE_TAG" ]] || [[ "$LATEST_RELEASE_TAG" == "<no value>" ]]; then
         write_log "ERROR" "Could not parse tag_name from GitHub response"
         echo "ERROR: Could not parse latest release tag from GitHub response." >&2
         exit 1

@@ -47,3 +47,18 @@ $script:MSG_AUTO_UPDATE_ENABLED = "خودکار اپڈیٹس فعال ہو گئ�
 $script:MSG_AUTO_UPDATE_DISABLED = "خودکار اپڈیٹس غیر فعال ہو گئیں"
 $script:MSG_AUTO_UPDATE_INVALID_FREQ = "خودکار اپڈیٹ کی غلط تعدد"
 $script:MSG_AUTO_UPDATE_SUPPORTED = "تعاون یافتہ اقدار: hourly, every3hours, every6hours, daily, weekly, monthly"
+
+# New Features (v1.7.0)
+$script:MSG_VERSION_PINNED = "Installing specific version"
+$script:MSG_SELF_UPDATE_CHECKING = "Checking for updater updates..."
+$script:MSG_SELF_UPDATE_AVAILABLE = "Updater update available"
+$script:MSG_SELF_UPDATE_SUCCESS = "Updater updated successfully"
+$script:MSG_SELF_UPDATE_CURRENT = "Updater is up to date"
+$script:MSG_HOOK_PRE_UPDATE = "Running pre-update hook..."
+$script:MSG_HOOK_POST_UPDATE = "Running post-update hook..."
+$script:MSG_HOOK_FAILED = "Hook script failed"
+$script:MSG_NOTIFICATION_SENT = "Notification sent"
+$script:MSG_DOWNLOAD_RETRY = "Retrying download..."
+$script:MSG_HISTORY_TITLE = "Update History"
+$script:MSG_HISTORY_EMPTY = "No update history"
+$script:MSG_CACHE_HIT = "Cached version matches, skipping download"

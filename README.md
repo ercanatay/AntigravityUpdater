@@ -5,7 +5,7 @@ Unofficial update scripts for [Antigravity Tools](https://github.com/lbjlaq/Anti
 > This repository **does not include the Antigravity Tools application**. It only includes updater tools.
 
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux%20%7C%20Docker-blue)
-![Updater Release](https://img.shields.io/badge/updater-1.6.5-green)
+![Updater Release](https://img.shields.io/badge/updater-1.7.0-green)
 ![Languages](https://img.shields.io/badge/languages-51-orange)
 ![License](https://img.shields.io/badge/license-MIT-brightgreen)
 
@@ -63,8 +63,17 @@ The updaters in this repository:
 | Changelog display | ✅ | ✅ | ✅ | ✅ |
 | Automatic update scheduling (opt-in) | ✅ | ✅ | ✅ | ✅ |
 | User-selectable schedule frequency | ✅ | ✅ | ✅ | ✅ |
-| Pre-update backup | ✅ | ✅ | ❌ | ❌ |
-| Rollback | ✅ | ✅ | ❌ | ❌ |
+| Pre-update backup | ✅ | ✅ | ✅ | ❌ |
+| Rollback | ✅ | ✅ | ✅ | ❌ |
+| GitHub API token support | ✅ | ✅ | ✅ | ✅ |
+| Version pinning | ✅ | ✅ | ✅ | ✅ |
+| JSON output mode | ✅ | ✅ | ✅ | ✅ |
+| Self-update mechanism | ✅ | ✅ | ✅ | ✅ |
+| Pre/post update hooks | ✅ | ✅ | ✅ | ✅ |
+| Desktop notifications | ✅ | ✅ | ✅ | ✅ |
+| Download resume/retry | ✅ | ✅ | ✅ | ❌ |
+| Update history log | ✅ | ✅ | ✅ | ✅ |
+| Checksum cache | ✅ | ✅ | ✅ | ✅ |
 | Package type selection | ❌ | ❌ | ✅ | ❌ |
 | Release asset extension fallback | ✅ | ✅ | ✅ | ❌ |
 | Restart running process | App reopens | App reopens | Process is terminated | Optional container recreate |
@@ -158,6 +167,11 @@ chmod +x docker/antigravity-docker-update.sh
 --silent            Minimize interaction
 --no-backup         Skip creating a backup before update
 --proxy URL         Use HTTP(S) proxy
+--token TOKEN       GitHub API token (or set GITHUB_TOKEN env var)
+--version TAG       Install a specific version instead of latest
+--json              Output version info as JSON
+--self-update       Update the updater itself
+--history           Show update history
 --enable-auto-update Enable automatic update checks
 --disable-auto-update Disable automatic update checks
 --auto-update-frequency VALUE
@@ -177,6 +191,11 @@ chmod +x docker/antigravity-docker-update.sh
 -Silent             Minimize interaction
 -NoBackup           Skip creating a backup before update
 -ProxyUrl <url>     Use proxy
+-Token <token>      GitHub API token (or set GITHUB_TOKEN env var)
+-Version <tag>      Install a specific version instead of latest
+-Json               Output version info as JSON
+-SelfUpdate         Update the updater itself
+-ShowHistory        Show update history
 -EnableAutoUpdate   Enable automatic update checks
 -DisableAutoUpdate  Disable automatic update checks
 -AutoUpdateFrequency <value>
@@ -191,9 +210,16 @@ chmod +x docker/antigravity-docker-update.sh
 --reset-lang        Reset saved language preference
 --check-only        Only check for updates
 --changelog         Show release notes before update
+--rollback          Roll back from the latest backup
 --silent            Minimize interaction
+--no-backup         Skip creating a backup before update
 --proxy URL         Use HTTP(S) proxy
 --format TYPE       auto | deb | rpm | appimage
+--token TOKEN       GitHub API token (or set GITHUB_TOKEN env var)
+--version TAG       Install a specific version instead of latest
+--json              Output version info as JSON
+--self-update       Update the updater itself
+--history           Show update history
 --enable-auto-update Enable automatic update checks
 --disable-auto-update Disable automatic update checks
 --auto-update-frequency VALUE
@@ -214,6 +240,11 @@ chmod +x docker/antigravity-docker-update.sh
 --tag TAG                    Set target tag manually (default: latest release tag)
 --proxy URL                  Proxy for GitHub API requests
 --silent                     Minimize interaction
+--token TOKEN                GitHub API token (or set GITHUB_TOKEN env var)
+--version TAG                Target a specific release version
+--json                       Output version info as JSON
+--self-update                Update the updater itself
+--history                    Show update history
 --enable-auto-update         Enable automatic update checks
 --disable-auto-update        Disable automatic update checks
 --auto-update-frequency VALUE
@@ -244,6 +275,99 @@ Examples:
 
 ```powershell
 .\antigravity-update.ps1 -EnableAutoUpdate -AutoUpdateFrequency monthly
+```
+
+### GitHub API Token
+
+To avoid rate limiting (60 requests/hour for unauthenticated requests), you can provide a GitHub API token:
+
+```bash
+# Via command line
+./antigravity-update.sh --token ghp_your_token_here
+
+# Via environment variable
+export GITHUB_TOKEN=ghp_your_token_here
+./antigravity-update.sh
+```
+
+```powershell
+.\windows\antigravity-update.ps1 -Token "ghp_your_token_here"
+```
+
+### Version Pinning
+
+Install a specific version instead of the latest:
+
+```bash
+./antigravity-update.sh --version 1.6.0
+./linux/antigravity-update.sh --version 1.5.0
+./docker/antigravity-docker-update.sh --version v1.6.0
+```
+
+```powershell
+.\windows\antigravity-update.ps1 -Version "1.6.0"
+```
+
+### JSON Output Mode
+
+Get structured JSON output for automation and CI/CD:
+
+```bash
+./antigravity-update.sh --json
+./linux/antigravity-update.sh --json
+./docker/antigravity-docker-update.sh --json
+```
+
+```powershell
+.\windows\antigravity-update.ps1 -Json
+```
+
+### Self-Update
+
+Update the updater itself to the latest version:
+
+```bash
+./antigravity-update.sh --self-update
+./linux/antigravity-update.sh --self-update
+./docker/antigravity-docker-update.sh --self-update
+```
+
+```powershell
+.\windows\antigravity-update.ps1 -SelfUpdate
+```
+
+### Pre/Post Update Hooks
+
+Place custom hook scripts in the hooks directory:
+
+- macOS: `~/Library/Application Support/AntigravityUpdater/hooks/`
+- Windows: `%APPDATA%\AntigravityUpdater\hooks\`
+- Linux/Docker: `$XDG_STATE_HOME/AntigravityUpdater/hooks/`
+
+Hook scripts receive `OLD_VERSION`, `NEW_VERSION`, and `PLATFORM` environment variables. A non-zero exit from `pre-update` aborts the update.
+
+```bash
+# Example: create a pre-update hook
+mkdir -p ~/.local/state/AntigravityUpdater/hooks
+cat > ~/.local/state/AntigravityUpdater/hooks/pre-update.sh << 'EOF'
+#!/bin/bash
+echo "Updating from $OLD_VERSION to $NEW_VERSION on $PLATFORM"
+EOF
+chmod +x ~/.local/state/AntigravityUpdater/hooks/pre-update.sh
+```
+
+### Update History
+
+View past update history:
+
+```bash
+./antigravity-update.sh --history
+./linux/antigravity-update.sh --history
+./docker/antigravity-docker-update.sh --history
+```
+
+```powershell
+.\windows\antigravity-update.ps1 -ShowHistory
 ```
 
 ## Common Scenarios
@@ -360,6 +484,9 @@ The current version includes security hardening, especially on macOS:
 - GitHub release JSON parsing now avoids `eval` in shell updaters, including the bundled `.app` updater script
 - Linux and Docker release metadata parsing now preserves the shared version/tag variables used by update flow decisions
 - Docker release tag parsing now preserves upstream `v` prefixes so image tags resolve correctly
+- Download retry with resume support (`curl -C -`) prevents partial download corruption
+- Pre/post update hooks run in isolated environments with limited env vars
+- GitHub API token is passed via Authorization header, never logged
 
 For detailed security history, see `CHANGELOG.md`.
 

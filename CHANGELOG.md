@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-02-10
+
+### Added
+- **Linux Backup & Rollback**: Linux updater now supports pre-update backup and `--rollback` / `--no-backup` flags, matching macOS/Windows functionality.
+- **GitHub API Token Support**: All platforms now accept `--token` / `-Token` parameter or `GITHUB_TOKEN` environment variable to increase API rate limit from 60 to 5,000 requests/hour.
+- **Version Pinning**: All platforms now support `--version` / `-Version` parameter to install a specific release instead of the latest.
+- **JSON Output Mode**: All platforms now support `--json` / `-Json` flag for structured JSON output, enabling CI/CD and monitoring integration.
+- **Self-Update Mechanism**: All platforms now support `--self-update` / `-SelfUpdate` to update the updater itself from the `ercanatay/AntigravityUpdater` repository.
+- **Pre/Post Update Hooks**: All platforms now look for optional `pre-update` and `post-update` hook scripts in the config directory. Pre-update hook failure aborts the update.
+- **Desktop Notifications**: macOS (osascript), Windows (BalloonTip), and Linux (notify-send) now send desktop notifications when scheduled updates complete.
+- **Download Resume/Retry**: Shell updaters now use `curl -C -` with exponential backoff retry (3 attempts) for resilient downloads.
+- **Update History Log**: All platforms now maintain an `update-history.json` file and support `--history` / `-ShowHistory` to view past updates.
+- **Checksum Cache**: All platforms now cache the last installed version hash to skip redundant downloads on subsequent runs.
+- Added 13 new locale message keys across all 51 shell and 51 PowerShell language files.
+
+### Changed
+- Bumped updater metadata, installer metadata, app bundle metadata, and README badge to `1.7.0`.
+- Updated `README.md` feature matrix with all new features.
+- Updated command reference for all platforms with new options.
+
 ## [1.6.5] - 2026-02-10
 
 ### Fixed

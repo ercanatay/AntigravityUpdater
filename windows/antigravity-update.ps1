@@ -1,7 +1,7 @@
 # Antigravity Tools Updater - Windows Version
 # Supports Windows 10/11 64-bit (including Bootcamp)
 # Supports 51 languages with automatic system language detection
-# Version 1.6.5 - Security Enhanced
+# Version 1.7.0 - Security Enhanced
 
 param(
     [switch]$Lang,
@@ -16,7 +16,12 @@ param(
     [switch]$EnableAutoUpdate,
     [switch]$DisableAutoUpdate,
     [ValidateSet("hourly", "every3hours", "every6hours", "daily", "weekly", "monthly")][string]$AutoUpdateFrequency = "",
-    [switch]$Help
+    [switch]$Help,
+    [string]$Token = "",
+    [string]$Version = "",
+    [switch]$Json,
+    [switch]$SelfUpdate,
+    [switch]$ShowHistory
 )
 
 # Ensure UTF-8 output
@@ -24,7 +29,7 @@ param(
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
 # Version
-$UPDATER_VERSION = "1.6.5"
+$UPDATER_VERSION = "1.7.0"
 
 # Settings
 $REPO_OWNER = "lbjlaq"
@@ -36,6 +41,9 @@ $LANG_PREF_FILE = Join-Path $env:APPDATA "antigravity_updater_lang.txt"
 $LOG_DIR = Join-Path $env:APPDATA "AntigravityUpdater"
 $LOG_FILE = Join-Path $LOG_DIR "updater.log"
 $BACKUP_DIR = Join-Path $LOG_DIR "backups"
+$HISTORY_FILE = Join-Path $LOG_DIR "update-history.json"
+$CACHE_FILE = Join-Path $LOG_DIR "download-cache.json"
+$HOOKS_DIR = Join-Path $LOG_DIR "hooks"
 
 # Secure temp directory with random suffix
 $TEMP_DIR = Join-Path $env:TEMP "AntigravityUpdater_$([System.Guid]::NewGuid().ToString('N').Substring(0,8))"
@@ -96,6 +104,19 @@ $script:MSG_AUTO_UPDATE_DISABLED = "Automatic updates disabled"
 $script:MSG_AUTO_UPDATE_INVALID_FREQ = "Invalid auto-update frequency"
 $script:LANG_NAME = "English"
 $script:LANG_CODE = "en"
+$script:MSG_VERSION_PINNED = "Installing specific version"
+$script:MSG_SELF_UPDATE_CHECKING = "Checking for updater updates..."
+$script:MSG_SELF_UPDATE_AVAILABLE = "Updater update available"
+$script:MSG_SELF_UPDATE_SUCCESS = "Updater updated successfully"
+$script:MSG_SELF_UPDATE_CURRENT = "Updater is up to date"
+$script:MSG_HOOK_PRE_UPDATE = "Running pre-update hook..."
+$script:MSG_HOOK_POST_UPDATE = "Running post-update hook..."
+$script:MSG_HOOK_FAILED = "Hook script failed"
+$script:MSG_NOTIFICATION_SENT = "Notification sent"
+$script:MSG_DOWNLOAD_RETRY = "Retrying download..."
+$script:MSG_HISTORY_TITLE = "Update History"
+$script:MSG_HISTORY_EMPTY = "No update history"
+$script:MSG_CACHE_HIT = "Cached version matches, skipping download"
 
 #region Logging Functions
 
@@ -557,16 +578,26 @@ function Stop-AntigravityApp {
 }
 
 function Get-ReleaseInfo {
-    param([string]$ProxyUrl = "")
+    param([string]$ProxyUrl = "", [string]$AuthToken = "", [string]$PinVersion = "")
 
     try {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        $releaseUrl = "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest"
+        if ($PinVersion) {
+            $releaseUrl = "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/tags/$PinVersion"
+        } else {
+            $releaseUrl = "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest"
+        }
 
         $webParams = @{
             Uri = $releaseUrl
             UseBasicParsing = $true
             Headers = @{ "User-Agent" = "AntigravityUpdater/$UPDATER_VERSION" }
+        }
+
+        # Token support
+        if ($AuthToken) {
+            $webParams.Headers["Authorization"] = "Bearer $AuthToken"
+            Write-Log "Using authenticated API request" "INFO"
         }
 
         # Proxy support
@@ -679,6 +710,217 @@ function Invoke-Download {
 
 #endregion
 
+#region New Feature Functions
+
+function Run-Hook {
+    param([string]$HookName)
+    $hookScript = Join-Path $HOOKS_DIR "$HookName.ps1"
+    if (-not (Test-Path $hookScript)) { return $true }
+
+    if ($HookName -eq "pre-update") {
+        Write-ColorOutput $script:MSG_HOOK_PRE_UPDATE "Blue"
+    } else {
+        Write-ColorOutput $script:MSG_HOOK_POST_UPDATE "Blue"
+    }
+    Write-Log "Running hook: $HookName" "INFO"
+
+    try {
+        $env:OLD_VERSION = $CURRENT_VERSION
+        $env:NEW_VERSION = $LATEST_VERSION
+        $env:PLATFORM = "windows"
+        & $hookScript
+        Write-Log "Hook completed: $HookName" "INFO"
+        return $true
+    } catch {
+        Write-Log "Hook failed: $HookName - $_" "ERROR"
+        Write-ColorOutput "$($script:MSG_HOOK_FAILED): $HookName" "Red"
+        return $false
+    }
+}
+
+function Send-Notification {
+    param([string]$Title, [string]$Message)
+    try {
+        [System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms') | Out-Null
+        $balloon = New-Object System.Windows.Forms.NotifyIcon
+        $balloon.Icon = [System.Drawing.SystemIcons]::Information
+        $balloon.BalloonTipTitle = $Title
+        $balloon.BalloonTipText = $Message
+        $balloon.Visible = $true
+        $balloon.ShowBalloonTip(5000)
+        Start-Sleep -Seconds 1
+        $balloon.Dispose()
+        Write-Log "Desktop notification sent" "INFO"
+    } catch {
+        Write-Log "Notification failed: $_" "WARN"
+    }
+}
+
+function Write-UpdateHistory {
+    param([string]$FromVer, [string]$ToVer, [string]$Status, [string]$Asset = "")
+    try {
+        $entry = @{
+            timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+            from_version = $FromVer
+            to_version = $ToVer
+            status = $Status
+            platform = "windows"
+            asset = $Asset
+        }
+        $history = @()
+        if (Test-Path $HISTORY_FILE) {
+            try { $history = @(Get-Content $HISTORY_FILE -Raw | ConvertFrom-Json) } catch { $history = @() }
+        }
+        $history += $entry
+        if ($history.Count -gt 50) { $history = $history[-50..-1] }
+        $history | ConvertTo-Json -Depth 10 | Set-Content $HISTORY_FILE -Encoding UTF8
+        Write-Log "Update history recorded" "INFO"
+    } catch {
+        Write-Log "Failed to write history: $_" "WARN"
+    }
+}
+
+function Show-UpdateHistory {
+    if (-not (Test-Path $HISTORY_FILE)) {
+        Write-ColorOutput $script:MSG_HISTORY_EMPTY "Yellow"
+        return
+    }
+    Write-ColorOutput $script:MSG_HISTORY_TITLE "Cyan"
+    try {
+        $history = @(Get-Content $HISTORY_FILE -Raw | ConvertFrom-Json)
+        $recent = $history | Select-Object -Last 10
+        foreach ($e in $recent) {
+            Write-Host "  $($e.timestamp)  $($e.from_version) -> $($e.to_version)  [$($e.status)]  $($e.asset)"
+        }
+    } catch {
+        Write-Host "  No history available"
+    }
+}
+
+function Test-DownloadCache {
+    param([string]$LatestVer)
+    if (-not (Test-Path $CACHE_FILE)) { return $false }
+    try {
+        $cache = Get-Content $CACHE_FILE -Raw | ConvertFrom-Json
+        return ($cache.version -eq $LatestVer)
+    } catch { return $false }
+}
+
+function Update-DownloadCache {
+    param([string]$Ver, [string]$Hash = "")
+    try {
+        @{ version = $Ver; hash = $Hash; platform = "windows" } | ConvertTo-Json | Set-Content $CACHE_FILE -Encoding UTF8
+    } catch {}
+}
+
+function Invoke-DownloadWithRetry {
+    param([string]$Url, [string]$OutFile, [string]$ProxyUrl = "", [string]$AuthToken = "", [int]$MaxRetries = 3)
+
+    for ($attempt = 1; $attempt -le $MaxRetries; $attempt++) {
+        try {
+            $webParams = @{ Uri = $Url; OutFile = $OutFile; UseBasicParsing = $true }
+            if ($ProxyUrl) { $webParams.Proxy = $ProxyUrl; $webParams.ProxyUseDefaultCredentials = $true }
+            if ($AuthToken) { $webParams.Headers = @{ "Authorization" = "Bearer $AuthToken" } }
+            $ProgressPreference = 'SilentlyContinue'
+            Invoke-WebRequest @webParams
+            $ProgressPreference = 'Continue'
+            return $true
+        } catch {
+            Write-Log "Download attempt $attempt failed: $_" "WARN"
+            if ($attempt -lt $MaxRetries) {
+                $wait = $attempt * 2
+                Write-ColorOutput "$($script:MSG_DOWNLOAD_RETRY) (attempt $($attempt+1)/$MaxRetries)" "Yellow"
+                Start-Sleep -Seconds $wait
+            }
+        }
+    }
+    return $false
+}
+
+function Get-JsonOutput {
+    param([string]$Current, [string]$Latest, [bool]$UpdateAvailable, [string]$Asset = "")
+    @{
+        current_version = $Current
+        latest_version = $Latest
+        update_available = $UpdateAvailable
+        platform = "windows"
+        asset = $Asset
+    } | ConvertTo-Json -Depth 5
+}
+
+function Invoke-SelfUpdate {
+    Write-ColorOutput $script:MSG_SELF_UPDATE_CHECKING "Blue"
+    Write-Log "Checking for updater self-update" "INFO"
+
+    try {
+        $webParams = @{
+            Uri = "https://api.github.com/repos/ercanatay/AntigravityUpdater/releases/latest"
+            UseBasicParsing = $true
+            Headers = @{ "User-Agent" = "AntigravityUpdater/$UPDATER_VERSION" }
+        }
+        if ($Token) { $webParams.Headers["Authorization"] = "Bearer $Token" }
+        if ($ProxyUrl) { $webParams.Proxy = $ProxyUrl }
+
+        $selfInfo = Invoke-RestMethod @webParams
+        $selfVer = $selfInfo.tag_name -replace '^v', ''
+
+        if (-not $selfVer) { return }
+
+        try {
+            $vSelf = [System.Version]$selfVer
+            $vCurrent = [System.Version]$UPDATER_VERSION
+            if ($vSelf -le $vCurrent) {
+                Write-ColorOutput "$($script:MSG_SELF_UPDATE_CURRENT) ($UPDATER_VERSION)" "Green"
+                return
+            }
+        } catch {
+            if ($selfVer -eq $UPDATER_VERSION) {
+                Write-ColorOutput "$($script:MSG_SELF_UPDATE_CURRENT) ($UPDATER_VERSION)" "Green"
+                return
+            }
+        }
+
+        Write-ColorOutput "$($script:MSG_SELF_UPDATE_AVAILABLE): $UPDATER_VERSION -> $selfVer" "Yellow"
+
+        $zipUrl = $selfInfo.zipball_url
+        if (-not $zipUrl) { return }
+
+        $selfTmp = Join-Path $env:TEMP "AntigravityUpdater-self-update.zip"
+        $selfExtract = Join-Path $env:TEMP "AntigravityUpdater-self-update"
+
+        $dlParams = @{ Uri = $zipUrl; OutFile = $selfTmp; UseBasicParsing = $true }
+        if ($Token) { $dlParams.Headers = @{ "Authorization" = "Bearer $Token" } }
+        if ($ProxyUrl) { $dlParams.Proxy = $ProxyUrl }
+        Invoke-WebRequest @dlParams
+
+        if (Test-Path $selfExtract) { Remove-Item $selfExtract -Recurse -Force }
+        Expand-Archive -Path $selfTmp -DestinationPath $selfExtract -Force
+
+        $innerDir = Get-ChildItem $selfExtract -Directory | Select-Object -First 1
+        if ($innerDir) {
+            $srcScript = Join-Path $innerDir.FullName "windows\antigravity-update.ps1"
+            if (Test-Path $srcScript) {
+                Copy-Item $srcScript -Destination $PSCommandPath -Force
+            }
+            $srcLocales = Join-Path $innerDir.FullName "windows\locales"
+            if (Test-Path $srcLocales) {
+                Copy-Item "$srcLocales\*" -Destination $LOCALES_DIR -Force -Recurse
+            }
+        }
+
+        Remove-Item $selfTmp -Force -ErrorAction SilentlyContinue
+        Remove-Item $selfExtract -Recurse -Force -ErrorAction SilentlyContinue
+
+        Write-ColorOutput "$($script:MSG_SELF_UPDATE_SUCCESS): $selfVer" "Green"
+        Write-Log "Updater self-updated: $UPDATER_VERSION -> $selfVer" "INFO"
+        exit 0
+    } catch {
+        Write-Log "Self-update failed: $_" "ERROR"
+    }
+}
+
+#endregion
+
 #region Help Function
 
 function Show-Help {
@@ -700,6 +942,11 @@ function Show-Help {
     Write-Host "  -EnableAutoUpdate  Enable automatic update checks"
     Write-Host "  -DisableAutoUpdate Disable automatic update checks"
     Write-Host "  -AutoUpdateFrequency <value> hourly | every3hours | every6hours | daily | weekly | monthly"
+    Write-Host "  -Token <token>       GitHub API token (or set GITHUB_TOKEN env var)"
+    Write-Host "  -Version <tag>       Install a specific version instead of latest"
+    Write-Host "  -Json                Output version info as JSON"
+    Write-Host "  -SelfUpdate          Update the updater itself"
+    Write-Host "  -ShowHistory         Show update history"
     Write-Host "  -Help              Show this help"
     Write-Host ""
 }
@@ -778,6 +1025,21 @@ if ($Help) {
     Show-Help
     exit 0
 }
+
+# Handle show history
+if ($ShowHistory) {
+    Show-UpdateHistory
+    exit 0
+}
+
+# Handle self-update
+if ($SelfUpdate) {
+    Invoke-SelfUpdate
+    exit 0
+}
+
+# Token fallback from environment variable
+if (-not $Token -and $env:GITHUB_TOKEN) { $Token = $env:GITHUB_TOKEN }
 
 Set-AutoUpdateTask -Enable:$EnableAutoUpdate -Disable:$DisableAutoUpdate -Frequency:$AutoUpdateFrequency
 
@@ -870,7 +1132,10 @@ if ($APP_PATH) {
 # Get latest version from GitHub
 Write-ColorOutput "$script:MSG_CHECKING_LATEST" "Blue"
 
-$releaseInfo = Get-ReleaseInfo -ProxyUrl $ProxyUrl
+if ($Version) {
+    Write-ColorOutput "$script:MSG_VERSION_PINNED: $Version" "Blue"
+}
+$releaseInfo = Get-ReleaseInfo -ProxyUrl $ProxyUrl -AuthToken $Token -PinVersion $Version
 
 if (-not $releaseInfo) {
     Write-ColorOutput "$script:MSG_API_ERROR" "Red"
@@ -905,11 +1170,27 @@ try {
 }
 
 if (-not $updateNeeded) {
+    if ($Json) {
+        $windowsAssetName = ""
+        $wa = Get-WindowsAsset -Assets $releaseInfo.assets
+        if ($wa) { $windowsAssetName = $wa.name }
+        Write-Output (Get-JsonOutput -Current $CURRENT_VERSION -Latest $LATEST_VERSION -UpdateAvailable $false -Asset $windowsAssetName)
+        exit 0
+    }
     Write-Host ""
     Write-ColorOutput "$script:MSG_ALREADY_LATEST" "Green"
     Write-Log "Already on latest version (Current: $CURRENT_VERSION, Latest: $LATEST_VERSION)" "INFO"
     Write-Host ""
     if (-not $Silent) { Read-Host "Press Enter to exit" }
+    exit 0
+}
+
+# JSON output mode
+if ($Json) {
+    $windowsAssetName = ""
+    $wa = Get-WindowsAsset -Assets $releaseInfo.assets
+    if ($wa) { $windowsAssetName = $wa.name }
+    Write-Output (Get-JsonOutput -Current $CURRENT_VERSION -Latest $LATEST_VERSION -UpdateAvailable $true -Asset $windowsAssetName)
     exit 0
 }
 
@@ -956,11 +1237,25 @@ if (-not $NoBackup -and $APP_PATH) {
     }
 }
 
+# Run pre-update hook
+if (-not (Run-Hook "pre-update")) {
+    Write-Log "Pre-update hook failed, aborting" "WARN"
+    Remove-TempDirectory
+    if (-not $Silent) { Read-Host "Press Enter to exit" }
+    exit 1
+}
+
+# Check download cache
+if (Test-DownloadCache $LATEST_VERSION) {
+    Write-ColorOutput "$script:MSG_CACHE_HIT" "Green"
+    Write-Log "Cache hit for version $LATEST_VERSION" "INFO"
+}
+
 # Download
 Write-ColorOutput "$script:MSG_DOWNLOADING" "Blue"
 Write-Host "   $DOWNLOAD_URL"
 
-if (-not (Invoke-Download -Url $DOWNLOAD_URL -OutFile $DOWNLOAD_PATH -ProxyUrl $ProxyUrl)) {
+if (-not (Invoke-DownloadWithRetry -Url $DOWNLOAD_URL -OutFile $DOWNLOAD_PATH -ProxyUrl $ProxyUrl -AuthToken $Token)) {
     Write-ColorOutput "$script:MSG_DOWNLOAD_FAILED" "Red"
     Remove-TempDirectory
     if (-not $Silent) { Read-Host "Press Enter to exit" }
@@ -1066,6 +1361,18 @@ Write-ColorOutput "   $($script:MSG_NEW_VERSION_LABEL): $LATEST_VERSION" "Green"
 Write-Host ""
 
 Write-Log "Update completed: $CURRENT_VERSION -> $LATEST_VERSION" "INFO"
+
+# Run post-update hook
+Run-Hook "post-update" | Out-Null
+
+# Record update history
+Write-UpdateHistory -FromVer $CURRENT_VERSION -ToVer $LATEST_VERSION -Status "success" -Asset $DOWNLOAD_NAME
+
+# Update download cache
+Update-DownloadCache -Ver $LATEST_VERSION
+
+# Send desktop notification
+Send-Notification -Title $script:MSG_TITLE -Message "$($script:MSG_UPDATE_SUCCESS) $LATEST_VERSION"
 
 if (-not $Silent) { Read-Host "Press Enter to exit" }
 

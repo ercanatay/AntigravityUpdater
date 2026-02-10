@@ -8,7 +8,7 @@
 set -eo pipefail
 
 # Version
-UPDATER_VERSION="1.6.5"
+UPDATER_VERSION="1.7.0"
 
 # Colors
 RED='\033[0;31m'
@@ -64,6 +64,10 @@ PROXY_URL=""
 ENABLE_AUTO_UPDATE=false
 DISABLE_AUTO_UPDATE=false
 AUTO_UPDATE_FREQUENCY=""
+GITHUB_TOKEN=""
+TARGET_VERSION=""
+JSON_OUTPUT=false
+SELF_UPDATE=false
 
 # Available languages (51 total)
 declare -a LANG_CODES=("en" "tr" "de" "fr" "es" "it" "pt" "ru" "zh" "zh-TW" "ja" "ko" "ar" "nl" "pl" "sv" "no" "da" "fi" "uk" "cs" "hi" "el" "he" "th" "vi" "id" "ms" "hu" "ro" "bg" "hr" "sr" "sk" "sl" "lt" "lv" "et" "ca" "eu" "gl" "is" "fa" "sw" "af" "fil" "bn" "ta" "ur" "mi" "cy")
@@ -120,6 +124,26 @@ MSG_AUTO_UPDATE_NOT_CONFIGURED="Not configured"
 MSG_AUTO_UPDATE_SUPPORTED="Supported values: hourly, every3hours, every6hours, daily, weekly, monthly"
 LANG_NAME="English"
 LANG_CODE="en"  # used by locale files
+
+# New feature messages
+MSG_VERSION_PINNED="📌 Installing specific version"
+MSG_SELF_UPDATE_CHECKING="🔄 Checking for updater updates..."
+MSG_SELF_UPDATE_AVAILABLE="📦 Updater update available"
+MSG_SELF_UPDATE_SUCCESS="✅ Updater updated successfully"
+MSG_SELF_UPDATE_CURRENT="✅ Updater is up to date"
+MSG_HOOK_PRE_UPDATE="⚙️  Running pre-update hook..."
+MSG_HOOK_POST_UPDATE="⚙️  Running post-update hook..."
+MSG_HOOK_FAILED="❌ Hook script failed"
+MSG_NOTIFICATION_SENT="🔔 Notification sent"
+MSG_DOWNLOAD_RETRY="🔄 Retrying download..."
+MSG_HISTORY_TITLE="📋 Update History"
+MSG_HISTORY_EMPTY="No update history"
+MSG_CACHE_HIT="✅ Cached version matches, skipping download"
+
+# History and cache files
+HISTORY_FILE="$LOG_DIR/update-history.json"
+CACHE_FILE="$LOG_DIR/download-cache.json"
+HOOKS_DIR="$LOG_DIR/hooks"
 
 #region Logging Functions
 
@@ -644,6 +668,11 @@ print_usage() {
     echo "  --silent            Run without prompts"
     echo "  --no-backup         Skip automatic backup"
     echo "  --proxy URL         Use proxy for connections"
+    echo "  --token TOKEN       GitHub API token (or set GITHUB_TOKEN env var)"
+    echo "  --version TAG       Install a specific version instead of latest"
+    echo "  --json              Output version info as JSON"
+    echo "  --self-update       Update the updater itself"
+    echo "  --history           Show update history"
     echo "  --enable-auto-update Enable automatic update checks"
     echo "  --disable-auto-update Disable automatic update checks"
     echo "  --auto-update-frequency VALUE"
@@ -724,6 +753,325 @@ EOF
 
 #endregion
 
+#region Hook Functions
+
+run_hook() {
+    local hook_name="$1"
+    shift
+    local hook_script="$HOOKS_DIR/${hook_name}.sh"
+
+    if [[ ! -f "$hook_script" ]]; then
+        return 0
+    fi
+
+    if [[ ! -x "$hook_script" ]]; then
+        chmod +x "$hook_script" 2>/dev/null || true
+    fi
+
+    local msg
+    if [[ "$hook_name" == "pre-update" ]]; then
+        msg="$MSG_HOOK_PRE_UPDATE"
+    else
+        msg="$MSG_HOOK_POST_UPDATE"
+    fi
+
+    if [[ "$SILENT" != true ]]; then
+        echo -e "${BLUE}$msg${NC}"
+    fi
+    write_log "INFO" "Running hook: $hook_name"
+
+    if ! OLD_VERSION="${CURRENT_VERSION:-}" NEW_VERSION="${LATEST_VERSION:-}" PLATFORM="macos" bash "$hook_script"; then
+        write_log "ERROR" "Hook failed: $hook_name"
+        if [[ "$SILENT" != true ]]; then
+            echo -e "${RED}$MSG_HOOK_FAILED: $hook_name${NC}"
+        fi
+        return 1
+    fi
+
+    write_log "INFO" "Hook completed: $hook_name"
+    return 0
+}
+
+#endregion
+
+#region Notification Functions
+
+send_notification() {
+    local title="$1"
+    local message="$2"
+
+    if command -v osascript &>/dev/null; then
+        osascript -e "display notification \"$message\" with title \"$title\"" 2>/dev/null || true
+        write_log "INFO" "Desktop notification sent: $message"
+    fi
+}
+
+#endregion
+
+#region History Functions
+
+write_history() {
+    local from_ver="$1"
+    local to_ver="$2"
+    local status="$3"
+    local asset="${4:-}"
+    local timestamp
+    timestamp=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
+
+    local entry
+    entry=$(python3 -c "
+import json, sys
+entry = {
+    'timestamp': sys.argv[1],
+    'from_version': sys.argv[2],
+    'to_version': sys.argv[3],
+    'status': sys.argv[4],
+    'platform': 'macos',
+    'asset': sys.argv[5]
+}
+print(json.dumps(entry))
+" "$timestamp" "$from_ver" "$to_ver" "$status" "$asset" 2>/dev/null) || return 0
+
+    if [[ -f "$HISTORY_FILE" ]]; then
+        local updated
+        updated=$(python3 -c "
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        history = json.load(f)
+except:
+    history = []
+history.append(json.loads(sys.argv[2]))
+history = history[-50:]
+print(json.dumps(history, indent=2))
+" "$HISTORY_FILE" "$entry" 2>/dev/null) || return 0
+        printf '%s\n' "$updated" > "$HISTORY_FILE"
+    else
+        printf '[%s]\n' "$entry" > "$HISTORY_FILE"
+    fi
+
+    write_log "INFO" "Update history recorded"
+}
+
+show_history() {
+    if [[ ! -f "$HISTORY_FILE" ]]; then
+        echo -e "${YELLOW}$MSG_HISTORY_EMPTY${NC}"
+        return
+    fi
+
+    echo -e "${CYAN}$MSG_HISTORY_TITLE${NC}"
+    echo ""
+    python3 -c "
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        history = json.load(f)
+    for entry in history[-10:]:
+        print(f\"  {entry['timestamp']}  {entry['from_version']} -> {entry['to_version']}  [{entry['status']}]  {entry.get('asset','')}\")
+except:
+    print('  No history available')
+" "$HISTORY_FILE" 2>/dev/null
+    echo ""
+}
+
+#endregion
+
+#region Cache Functions
+
+check_download_cache() {
+    local latest_ver="$1"
+
+    if [[ ! -f "$CACHE_FILE" ]]; then
+        return 1
+    fi
+
+    local cached_ver
+    cached_ver=$(python3 -c "
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        cache = json.load(f)
+    if cache.get('version') == sys.argv[2]:
+        print('match')
+    else:
+        print('mismatch')
+except:
+    print('error')
+" "$CACHE_FILE" "$latest_ver" 2>/dev/null)
+
+    [[ "$cached_ver" == "match" ]]
+}
+
+update_download_cache() {
+    local version="$1"
+    local asset_hash="${2:-}"
+
+    python3 -c "
+import json, sys
+cache = {'version': sys.argv[1], 'hash': sys.argv[2], 'platform': 'macos'}
+with open(sys.argv[3], 'w') as f:
+    json.dump(cache, f, indent=2)
+" "$version" "$asset_hash" "$CACHE_FILE" 2>/dev/null || true
+}
+
+#endregion
+
+#region Download with Retry
+
+download_with_retry() {
+    local url="$1"
+    local output="$2"
+    local max_retries=3
+    local attempt=1
+
+    while [[ $attempt -le $max_retries ]]; do
+        local dl_opts=("-L" "-C" "-" "-o" "$output")
+        if [[ "$SILENT" != true ]]; then
+            dl_opts+=("--progress-bar")
+        else
+            dl_opts+=("-sS")
+        fi
+        if [[ -n "$PROXY_URL" ]]; then
+            dl_opts+=("--proxy" "$PROXY_URL")
+        fi
+        if [[ -n "$GITHUB_TOKEN" ]]; then
+            dl_opts+=("-H" "Authorization: Bearer $GITHUB_TOKEN")
+        fi
+
+        if curl "${dl_opts[@]}" "$url" 2>/dev/null; then
+            return 0
+        fi
+
+        if [[ $attempt -lt $max_retries ]]; then
+            local wait_time=$((attempt * 2))
+            if [[ "$SILENT" != true ]]; then
+                echo -e "${YELLOW}$MSG_DOWNLOAD_RETRY (attempt $((attempt+1))/$max_retries)${NC}"
+            fi
+            write_log "WARN" "Download attempt $attempt failed, retrying in ${wait_time}s"
+            sleep "$wait_time"
+        fi
+        attempt=$((attempt + 1))
+    done
+
+    return 1
+}
+
+#endregion
+
+#region JSON Output
+
+output_json() {
+    local current="$1"
+    local latest="$2"
+    local update_available="$3"
+    local asset="${4:-}"
+
+    python3 -c "
+import json, sys
+data = {
+    'current_version': sys.argv[1],
+    'latest_version': sys.argv[2],
+    'update_available': sys.argv[3] == 'true',
+    'platform': 'macos',
+    'asset': sys.argv[4] if len(sys.argv) > 4 else ''
+}
+print(json.dumps(data, indent=2))
+" "$current" "$latest" "$update_available" "$asset" 2>/dev/null
+}
+
+#endregion
+
+#region Self-Update
+
+self_update() {
+    if [[ "$SILENT" != true ]]; then
+        echo -e "${BLUE}$MSG_SELF_UPDATE_CHECKING${NC}"
+    fi
+    write_log "INFO" "Checking for updater self-update"
+
+    local self_curl=("-s" "-f" "-A" "AntigravityUpdater/$UPDATER_VERSION")
+    if [[ -n "$PROXY_URL" ]]; then
+        self_curl+=("--proxy" "$PROXY_URL")
+    fi
+    if [[ -n "$GITHUB_TOKEN" ]]; then
+        self_curl+=("-H" "Authorization: Bearer $GITHUB_TOKEN")
+    fi
+
+    local self_info
+    self_info=$(curl "${self_curl[@]}" "https://api.github.com/repos/ercanatay/AntigravityUpdater/releases/latest" 2>/dev/null) || {
+        if [[ "$SILENT" != true ]]; then
+            echo -e "${RED}$MSG_API_ERROR${NC}"
+        fi
+        return 1
+    }
+
+    local self_ver
+    self_ver=$(printf '%s' "$self_info" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tag_name','').lstrip('v'))" 2>/dev/null)
+
+    if [[ -z "$self_ver" ]]; then
+        write_log "ERROR" "Could not parse updater version"
+        return 1
+    fi
+
+    if [[ "$self_ver" == "$UPDATER_VERSION" ]] || ! version_gt "$self_ver" "$UPDATER_VERSION"; then
+        if [[ "$SILENT" != true ]]; then
+            echo -e "${GREEN}$MSG_SELF_UPDATE_CURRENT ($UPDATER_VERSION)${NC}"
+        fi
+        write_log "INFO" "Updater is up to date: $UPDATER_VERSION"
+        return 0
+    fi
+
+    if [[ "$SILENT" != true ]]; then
+        echo -e "${YELLOW}$MSG_SELF_UPDATE_AVAILABLE: $UPDATER_VERSION -> $self_ver${NC}"
+    fi
+
+    local tarball_url
+    tarball_url=$(printf '%s' "$self_info" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tarball_url',''))" 2>/dev/null)
+
+    if [[ -z "$tarball_url" ]]; then
+        write_log "ERROR" "No tarball URL found for self-update"
+        return 1
+    fi
+
+    local self_tmp="$TEMP_DIR/self-update.tar.gz"
+    local dl_opts=("-L" "-o" "$self_tmp" "-sS")
+    if [[ -n "$PROXY_URL" ]]; then
+        dl_opts+=("--proxy" "$PROXY_URL")
+    fi
+    if [[ -n "$GITHUB_TOKEN" ]]; then
+        dl_opts+=("-H" "Authorization: Bearer $GITHUB_TOKEN")
+    fi
+
+    if ! curl "${dl_opts[@]}" "$tarball_url" 2>/dev/null; then
+        write_log "ERROR" "Self-update download failed"
+        return 1
+    fi
+
+    local extract_dir="$TEMP_DIR/self-update-extract"
+    mkdir -p "$extract_dir"
+    if ! tar -xzf "$self_tmp" -C "$extract_dir" --strip-components=1 2>/dev/null; then
+        write_log "ERROR" "Self-update extraction failed"
+        return 1
+    fi
+
+    # Copy updated files to script directory
+    if [[ -f "$extract_dir/antigravity-update.sh" ]]; then
+        cp "$extract_dir/antigravity-update.sh" "$SCRIPT_DIR/antigravity-update.sh"
+        chmod +x "$SCRIPT_DIR/antigravity-update.sh"
+    fi
+    if [[ -d "$extract_dir/locales" ]]; then
+        cp -R "$extract_dir/locales/"* "$LOCALES_DIR/" 2>/dev/null || true
+    fi
+
+    if [[ "$SILENT" != true ]]; then
+        echo -e "${GREEN}$MSG_SELF_UPDATE_SUCCESS: $self_ver${NC}"
+    fi
+    write_log "INFO" "Updater self-updated: $UPDATER_VERSION -> $self_ver"
+    exit 0
+}
+
+#endregion
+
 #region Main Execution
 
 # Initialize
@@ -786,6 +1134,34 @@ while [[ $# -gt 0 ]]; do
             AUTO_UPDATE_FREQUENCY="$2"
             shift 2
             ;;
+        --token)
+            if [[ $# -lt 2 ]]; then
+                echo -e "${RED}Error: --token requires a value${NC}"
+                exit 1
+            fi
+            GITHUB_TOKEN="$2"
+            shift 2
+            ;;
+        --version)
+            if [[ $# -lt 2 ]]; then
+                echo -e "${RED}Error: --version requires a value${NC}"
+                exit 1
+            fi
+            TARGET_VERSION="$2"
+            shift 2
+            ;;
+        --json)
+            JSON_OUTPUT=true
+            shift
+            ;;
+        --self-update)
+            SELF_UPDATE=true
+            shift
+            ;;
+        --history)
+            show_history
+            exit 0
+            ;;
         --help|-h)
             print_usage
             exit 0
@@ -795,6 +1171,13 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Use GITHUB_TOKEN env var as fallback
+if [[ -z "$GITHUB_TOKEN" ]] && [[ -n "${GITHUB_TOKEN_ENV:-}" ]]; then
+    GITHUB_TOKEN="$GITHUB_TOKEN_ENV"
+elif [[ -z "$GITHUB_TOKEN" ]] && [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    : # Already set from environment
+fi
 
 # Handle rollback
 if [[ "$ROLLBACK" == true ]]; then
@@ -808,6 +1191,11 @@ fi
 
 if [[ "$ENABLE_AUTO_UPDATE" == true ]] || [[ "$DISABLE_AUTO_UPDATE" == true ]]; then
     configure_auto_update
+fi
+
+# Handle self-update
+if [[ "$SELF_UPDATE" == true ]]; then
+    self_update
 fi
 
 # Load language preference
@@ -877,14 +1265,31 @@ if [[ "$SILENT" != true ]]; then
     echo -e "${BLUE}$MSG_CHECKING_LATEST${NC}"
 fi
 
-# Build curl command with optional proxy
+# Build curl command with optional proxy and token
 declare -a CURL_OPTS=("-s" "-f" "-A" "AntigravityUpdater/$UPDATER_VERSION")
 if [[ -n "$PROXY_URL" ]]; then
     CURL_OPTS+=("--proxy" "$PROXY_URL")
     write_log "INFO" "Using proxy: $PROXY_URL"
 fi
+if [[ -n "$GITHUB_TOKEN" ]]; then
+    CURL_OPTS+=("-H" "Authorization: Bearer $GITHUB_TOKEN")
+    write_log "INFO" "Using GitHub API token"
+fi
 
-if ! RELEASE_INFO=$(curl "${CURL_OPTS[@]}" "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest" 2>/dev/null); then
+# Version pinning: fetch specific release or latest
+if [[ -n "$TARGET_VERSION" ]]; then
+    local_tag="$TARGET_VERSION"
+    [[ "$local_tag" =~ ^[0-9] ]] && local_tag="v$local_tag"
+    RELEASE_API_URL="https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/tags/$local_tag"
+    if [[ "$SILENT" != true ]]; then
+        echo -e "${BLUE}$MSG_VERSION_PINNED: $TARGET_VERSION${NC}"
+    fi
+    write_log "INFO" "Version pinning: targeting $local_tag"
+else
+    RELEASE_API_URL="https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest"
+fi
+
+if ! RELEASE_INFO=$(curl "${CURL_OPTS[@]}" "$RELEASE_API_URL" 2>/dev/null); then
     if [[ "$SILENT" != true ]]; then
         echo -e "${RED}$MSG_API_ERROR${NC}"
     fi
@@ -940,19 +1345,33 @@ if [[ "$SHOW_CHANGELOG" == true ]] && [[ "$SILENT" != true ]]; then
 fi
 
 # Check if update is needed
+UPDATE_AVAILABLE=false
 # Only compare versions when current version looks like a valid version number;
 # otherwise (e.g. "Not installed", "Unknown") always proceed with the update.
 if [[ "$CURRENT_VERSION" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
     if [[ "$CURRENT_VERSION" == "$LATEST_VERSION" ]] || ! version_gt "$LATEST_VERSION" "$CURRENT_VERSION"; then
+        if [[ "$JSON_OUTPUT" == true ]]; then
+            output_json "$CURRENT_VERSION" "$LATEST_VERSION" "false"
+            exit 0
+        fi
         if [[ "$SILENT" != true ]]; then
             echo ""
             echo -e "${GREEN}$MSG_ALREADY_LATEST${NC}"
         fi
         write_log "INFO" "Already on latest version (Current: $CURRENT_VERSION, Latest: $LATEST_VERSION)"
         exit 0
+    else
+        UPDATE_AVAILABLE=true
     fi
 else
+    UPDATE_AVAILABLE=true
     write_log "INFO" "Current version is not numeric ('$CURRENT_VERSION'), proceeding with update"
+fi
+
+# JSON output mode
+if [[ "$JSON_OUTPUT" == true ]]; then
+    output_json "$CURRENT_VERSION" "$LATEST_VERSION" "$UPDATE_AVAILABLE"
+    exit 0
 fi
 
 # Check-only mode
@@ -963,9 +1382,23 @@ if [[ "$CHECK_ONLY" == true ]]; then
     exit 0
 fi
 
+# Check download cache
+if [[ "$UPDATE_AVAILABLE" == true ]] && check_download_cache "$LATEST_VERSION"; then
+    if [[ "$SILENT" != true ]]; then
+        echo -e "${GREEN}$MSG_CACHE_HIT${NC}"
+    fi
+    write_log "INFO" "Download cache hit for version $LATEST_VERSION"
+fi
+
 if [[ "$SILENT" != true ]]; then
     echo ""
     echo -e "${YELLOW}$MSG_NEW_VERSION${NC}"
+fi
+
+# Run pre-update hook
+if ! run_hook "pre-update"; then
+    write_log "ERROR" "Pre-update hook failed, aborting update"
+    exit 1
 fi
 
 # Select download asset from release list
@@ -998,22 +1431,12 @@ fi
 write_log "INFO" "Selected release asset: $SELECTED_ASSET_NAME ($SELECTED_ASSET_TYPE)"
 write_log "INFO" "Download URL: $SELECTED_ASSET_URL"
 
-# Build download command with optional proxy
-declare -a DOWNLOAD_OPTS=("-L" "-o" "$DOWNLOAD_PATH")
-if [[ "$SILENT" != true ]]; then
-    DOWNLOAD_OPTS+=("--progress-bar")
-else
-    DOWNLOAD_OPTS+=("-sS")
-fi
-if [[ -n "$PROXY_URL" ]]; then
-    DOWNLOAD_OPTS+=("--proxy" "$PROXY_URL")
-fi
-
-if ! curl "${DOWNLOAD_OPTS[@]}" "$SELECTED_ASSET_URL"; then
+# Download with retry support
+if ! download_with_retry "$SELECTED_ASSET_URL" "$DOWNLOAD_PATH"; then
     if [[ "$SILENT" != true ]]; then
         echo -e "${RED}$MSG_DOWNLOAD_FAILED${NC}"
     fi
-    write_log "ERROR" "Download failed"
+    write_log "ERROR" "Download failed after retries"
     rm -rf "$TEMP_DIR"
     exit 1
 fi
@@ -1201,5 +1624,18 @@ if [[ "$SILENT" != true ]]; then
 fi
 
 write_log "INFO" "Update completed: $CURRENT_VERSION -> $LATEST_VERSION"
+
+# Post-update hook
+run_hook "post-update" || true
+
+# Record update history
+write_history "$CURRENT_VERSION" "$LATEST_VERSION" "success" "$SELECTED_ASSET_NAME"
+
+# Update download cache
+local_hash=$(get_file_hash "$DOWNLOAD_PATH" 2>/dev/null || echo "")
+update_download_cache "$LATEST_VERSION" "$local_hash"
+
+# Send desktop notification
+send_notification "$MSG_TITLE" "$MSG_UPDATE_SUCCESS: $LATEST_VERSION"
 
 #endregion

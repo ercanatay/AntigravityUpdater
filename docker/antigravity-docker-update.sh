@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-UPDATER_VERSION="1.6.5"
+UPDATER_VERSION="1.7.0"
 REPO_OWNER="lbjlaq"
 REPO_NAME="Antigravity-Manager"
 DEFAULT_IMAGE_REPO="lbjlaq/antigravity-manager"
@@ -26,6 +26,10 @@ RESET_LANG=false
 ENABLE_AUTO_UPDATE=false
 DISABLE_AUTO_UPDATE=false
 AUTO_UPDATE_FREQUENCY=""
+GITHUB_TOKEN=""
+TARGET_VERSION=""
+JSON_OUTPUT=false
+SELF_UPDATE=false
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOCALES_DIR="$SCRIPT_DIR/../locales"
@@ -35,6 +39,9 @@ SELECTED_LANG="en"
 XDG_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
 LOG_DIR="$XDG_STATE_HOME/AntigravityUpdater"
 LOG_FILE="$LOG_DIR/docker-updater.log"
+HISTORY_FILE="$LOG_DIR/update-history.json"
+CACHE_FILE="$LOG_DIR/download-cache.json"
+HOOKS_DIR="$LOG_DIR/hooks"
 TEMP_DIR="$(mktemp -d -t antigravity-docker-updater.XXXXXXXX)"
 
 LATEST_RELEASE_TAG=""
@@ -85,6 +92,19 @@ MSG_AUTO_UPDATE_ENABLED="Automatic updates enabled"
 MSG_AUTO_UPDATE_DISABLED="Automatic updates disabled"
 MSG_AUTO_UPDATE_INVALID_FREQ="Invalid auto-update frequency"
 MSG_AUTO_UPDATE_SUPPORTED="Supported values: hourly, every3hours, every6hours, daily, weekly, monthly"
+MSG_VERSION_PINNED="Installing specific version"
+MSG_SELF_UPDATE_CHECKING="Checking for updater updates..."
+MSG_SELF_UPDATE_AVAILABLE="Updater update available"
+MSG_SELF_UPDATE_SUCCESS="Updater updated successfully"
+MSG_SELF_UPDATE_CURRENT="Updater is up to date"
+MSG_HOOK_PRE_UPDATE="Running pre-update hook..."
+MSG_HOOK_POST_UPDATE="Running post-update hook..."
+MSG_HOOK_FAILED="Hook script failed"
+MSG_NOTIFICATION_SENT="Notification sent"
+MSG_DOWNLOAD_RETRY="Retrying download..."
+MSG_HISTORY_TITLE="Update History"
+MSG_HISTORY_EMPTY="No update history"
+MSG_CACHE_HIT="Cached version matches, skipping download"
 
 cleanup() {
     rm -rf "$TEMP_DIR"
@@ -108,6 +128,12 @@ Options:
   --tag TAG                    Override tag (default: latest GitHub release tag)
   --proxy URL                  Proxy for GitHub API requests
   --silent                     Run with minimal output
+  --rollback                   (N/A for Docker)
+  --token TOKEN                GitHub API token (or set GITHUB_TOKEN env var)
+  --version TAG                Target a specific release version
+  --json                       Output version info as JSON
+  --self-update                Update the updater itself
+  --history                    Show update history
   --enable-auto-update          Enable automatic update checks
   --disable-auto-update         Disable automatic update checks
   --auto-update-frequency VALUE hourly | every3hours | every6hours | daily | weekly | monthly
@@ -275,7 +301,18 @@ fetch_latest_release_tag() {
         curl_cmd+=(--proxy "$PROXY_URL")
     fi
 
-    release_info=$("${curl_cmd[@]}" "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest" || true)
+    if [[ -n "$GITHUB_TOKEN" ]]; then
+        curl_cmd+=(-H "Authorization: Bearer $GITHUB_TOKEN")
+    fi
+
+    if [[ -n "$TARGET_VERSION" ]]; then
+        local pinned_tag="$TARGET_VERSION"
+        [[ "$pinned_tag" =~ ^[0-9] ]] && pinned_tag="v$pinned_tag"
+        release_info=$("${curl_cmd[@]}" "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/tags/$pinned_tag" || true)
+        print_msg "$MSG_VERSION_PINNED: $pinned_tag"
+    else
+        release_info=$("${curl_cmd[@]}" "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest" || true)
+    fi
 
     if [[ -z "$release_info" ]] || [[ "$release_info" == *"API rate limit exceeded"* ]]; then
         write_log "ERROR" "Failed to fetch latest release from GitHub API"
@@ -572,6 +609,144 @@ get_frequency_seconds() {
     esac
 }
 
+run_hook() {
+    local hook_name="$1"
+    local hook_script="$HOOKS_DIR/${hook_name}.sh"
+    if [[ ! -f "$hook_script" ]]; then return 0; fi
+    [[ ! -x "$hook_script" ]] && chmod +x "$hook_script" 2>/dev/null || true
+    print_msg "$MSG_HOOK_PRE_UPDATE"
+    write_log "INFO" "Running hook: $hook_name"
+    if ! OLD_VERSION="${CURRENT_IMAGE:-}" NEW_VERSION="${TARGET_IMAGE:-}" PLATFORM="docker" bash "$hook_script"; then
+        write_log "ERROR" "Hook failed: $hook_name"
+        print_msg "ERROR: $MSG_HOOK_FAILED: $hook_name"
+        return 1
+    fi
+    write_log "INFO" "Hook completed: $hook_name"
+    return 0
+}
+
+send_notification() {
+    local title="$1" message="$2"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send "$title" "$message" 2>/dev/null || true
+        write_log "INFO" "Desktop notification sent"
+    fi
+}
+
+write_history() {
+    local from_ver="$1" to_ver="$2" status="$3" asset="${4:-}"
+    local timestamp
+    timestamp=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
+    local entry
+    entry=$(python3 -c "
+import json, sys
+entry = {'timestamp': sys.argv[1], 'from_version': sys.argv[2], 'to_version': sys.argv[3],
+         'status': sys.argv[4], 'platform': 'docker', 'asset': sys.argv[5]}
+print(json.dumps(entry))
+" "$timestamp" "$from_ver" "$to_ver" "$status" "$asset" 2>/dev/null) || return 0
+    if [[ -f "$HISTORY_FILE" ]]; then
+        local updated
+        updated=$(python3 -c "
+import json, sys
+try:
+    with open(sys.argv[1]) as f: history = json.load(f)
+except: history = []
+history.append(json.loads(sys.argv[2]))
+history = history[-50:]
+print(json.dumps(history, indent=2))
+" "$HISTORY_FILE" "$entry" 2>/dev/null) || return 0
+        printf '%s\n' "$updated" > "$HISTORY_FILE"
+    else
+        printf '[%s]\n' "$entry" > "$HISTORY_FILE"
+    fi
+}
+
+show_history() {
+    if [[ ! -f "$HISTORY_FILE" ]]; then echo "$MSG_HISTORY_EMPTY"; return; fi
+    echo "$MSG_HISTORY_TITLE"
+    python3 -c "
+import json, sys
+try:
+    with open(sys.argv[1]) as f: history = json.load(f)
+    for e in history[-10:]:
+        print(f\"  {e['timestamp']}  {e['from_version']} -> {e['to_version']}  [{e['status']}]  {e.get('asset','')}\")
+except: print('  No history available')
+" "$HISTORY_FILE" 2>/dev/null
+}
+
+check_download_cache() {
+    local latest_ver="$1"
+    [[ ! -f "$CACHE_FILE" ]] && return 1
+    local result
+    result=$(python3 -c "
+import json, sys
+try:
+    with open(sys.argv[1]) as f: cache = json.load(f)
+    print('match' if cache.get('version') == sys.argv[2] else 'mismatch')
+except: print('error')
+" "$CACHE_FILE" "$latest_ver" 2>/dev/null)
+    [[ "$result" == "match" ]]
+}
+
+update_download_cache() {
+    local version="$1" hash="${2:-}"
+    python3 -c "
+import json, sys
+cache = {'version': sys.argv[1], 'hash': sys.argv[2], 'platform': 'docker'}
+with open(sys.argv[3], 'w') as f: json.dump(cache, f, indent=2)
+" "$version" "$hash" "$CACHE_FILE" 2>/dev/null || true
+}
+
+output_json() {
+    local current="$1" latest="$2" available="$3" asset="${4:-}"
+    python3 -c "
+import json, sys
+data = {'current_version': sys.argv[1], 'latest_version': sys.argv[2],
+        'update_available': sys.argv[3] == 'true', 'platform': 'docker', 'asset': sys.argv[4] if len(sys.argv) > 4 else ''}
+print(json.dumps(data, indent=2))
+" "$current" "$latest" "$available" "$asset" 2>/dev/null
+}
+
+self_update() {
+    print_msg "$MSG_SELF_UPDATE_CHECKING"
+    local self_curl=(curl -sS -L -A "AntigravityUpdater/$UPDATER_VERSION")
+    [[ -n "$PROXY_URL" ]] && self_curl+=(--proxy "$PROXY_URL")
+    [[ -n "$GITHUB_TOKEN" ]] && self_curl+=(-H "Authorization: Bearer $GITHUB_TOKEN")
+    local self_info
+    self_info=$("${self_curl[@]}" "https://api.github.com/repos/ercanatay/AntigravityUpdater/releases/latest" 2>/dev/null) || { echo "ERROR: $MSG_API_ERROR" >&2; return 1; }
+    local self_ver
+    self_ver=$(printf '%s' "$self_info" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tag_name','').lstrip('v'))" 2>/dev/null)
+    [[ -z "$self_ver" ]] && return 1
+
+    # Simple version comparison
+    if [[ "$self_ver" == "$UPDATER_VERSION" ]]; then
+        print_msg "$MSG_SELF_UPDATE_CURRENT ($UPDATER_VERSION)"
+        return 0
+    fi
+
+    print_msg "$MSG_SELF_UPDATE_AVAILABLE: $UPDATER_VERSION -> $self_ver"
+    local tarball_url
+    tarball_url=$(printf '%s' "$self_info" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tarball_url',''))" 2>/dev/null)
+    [[ -z "$tarball_url" ]] && return 1
+
+    local self_tmp="$TEMP_DIR/self-update.tar.gz"
+    local dl_opts=(-L -o "$self_tmp" -sS)
+    [[ -n "$PROXY_URL" ]] && dl_opts+=(--proxy "$PROXY_URL")
+    [[ -n "$GITHUB_TOKEN" ]] && dl_opts+=(-H "Authorization: Bearer $GITHUB_TOKEN")
+    curl "${dl_opts[@]}" "$tarball_url" 2>/dev/null || return 1
+
+    local extract_dir="$TEMP_DIR/self-update-extract"
+    mkdir -p "$extract_dir"
+    tar -xzf "$self_tmp" -C "$extract_dir" --strip-components=1 2>/dev/null || return 1
+
+    [[ -f "$extract_dir/docker/antigravity-docker-update.sh" ]] && cp "$extract_dir/docker/antigravity-docker-update.sh" "$SCRIPT_DIR/antigravity-docker-update.sh" && chmod +x "$SCRIPT_DIR/antigravity-docker-update.sh"
+    [[ -d "$extract_dir/locales" ]] && cp -R "$extract_dir/locales/"* "$LOCALES_DIR/" 2>/dev/null || true
+
+    print_msg "$MSG_SELF_UPDATE_SUCCESS: $self_ver"
+    write_log "INFO" "Updater self-updated: $UPDATER_VERSION -> $self_ver"
+    exit 0
+}
+
 configure_auto_update() {
     local frequency="${AUTO_UPDATE_FREQUENCY:-daily}"
     local seconds
@@ -702,6 +877,27 @@ main() {
                 AUTO_UPDATE_FREQUENCY="$2"
                 shift
                 ;;
+            --token)
+                if [[ $# -lt 2 ]]; then echo "ERROR: --token requires a value" >&2; exit 1; fi
+                GITHUB_TOKEN="$2"
+                shift
+                ;;
+            --version)
+                if [[ $# -lt 2 ]]; then echo "ERROR: --version requires a value" >&2; exit 1; fi
+                TARGET_VERSION="$2"
+                shift
+                ;;
+            --json)
+                JSON_OUTPUT=true
+                ;;
+            --self-update)
+                SELF_UPDATE=true
+                ;;
+            --history)
+                init_logging
+                show_history
+                exit 0
+                ;;
             --help|-h)
                 print_usage
                 exit 0
@@ -716,6 +912,16 @@ main() {
     done
 
     init_logging
+
+    # GITHUB_TOKEN env var fallback
+    if [[ -z "$GITHUB_TOKEN" ]] && [[ -n "${GITHUB_TOKEN:-}" ]]; then
+        : # already set
+    fi
+
+    # Handle self-update
+    if [[ "$SELF_UPDATE" == true ]]; then
+        self_update
+    fi
 
     if [[ "$ENABLE_AUTO_UPDATE" == true ]] || [[ "$DISABLE_AUTO_UPDATE" == true ]]; then
         configure_auto_update
@@ -766,6 +972,18 @@ main() {
         exit 0
     fi
 
+    # JSON output mode
+    if [[ "$JSON_OUTPUT" == true ]]; then
+        ensure_docker
+        inspect_container
+        local update_avail="false"
+        if [[ "$CURRENT_IMAGE" != "$TARGET_IMAGE" ]]; then
+            update_avail="true"
+        fi
+        output_json "$CURRENT_IMAGE" "$TARGET_IMAGE" "$update_avail" "$TARGET_TAG"
+        exit 0
+    fi
+
     ensure_docker
     inspect_container
 
@@ -781,6 +999,9 @@ main() {
         exit 0
     fi
 
+    # Pre-update hook
+    run_hook "pre-update" || true
+
     pull_target_image
 
     if [[ "$RESTART_CONTAINER" == true ]]; then
@@ -795,6 +1016,18 @@ main() {
             print_msg "$MSG_IMAGE_PULLED. You can start a new container with your preferred docker run / compose setup."
         fi
     fi
+
+    # Post-update hook
+    run_hook "post-update" || true
+
+    # Write update history
+    write_history "$CURRENT_IMAGE" "$TARGET_IMAGE" "success" "$TARGET_TAG"
+
+    # Update download cache
+    update_download_cache "$TARGET_TAG" ""
+
+    # Send desktop notification
+    send_notification "$MSG_TITLE" "$MSG_UPDATE_SUCCESS: $TARGET_IMAGE"
 
     write_log "INFO" "Docker updater completed"
 }

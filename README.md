@@ -5,7 +5,7 @@ Unofficial update scripts for [Antigravity Tools](https://github.com/lbjlaq/Anti
 > This repository **does not include the Antigravity Tools application**. It only includes updater tools.
 
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux%20%7C%20Docker-blue)
-![Updater Release](https://img.shields.io/badge/updater-1.6.5-green)
+![Updater Release](https://img.shields.io/badge/updater-1.6.6-green)
 ![Languages](https://img.shields.io/badge/languages-51-orange)
 ![License](https://img.shields.io/badge/license-MIT-brightgreen)
 
@@ -13,6 +13,8 @@ Unofficial update scripts for [Antigravity Tools](https://github.com/lbjlaq/Anti
 
 - [What Does It Do?](#what-does-it-do)
 - [Versions and Releases](#versions-and-releases)
+- [Release Workflow](#release-workflow)
+- [Recent PR Review Snapshot](#recent-pr-review-snapshot)
 - [Which Updater Should I Use?](#which-updater-should-i-use)
 - [Feature Matrix](#feature-matrix)
 - [Quick Start](#quick-start)
@@ -41,6 +43,23 @@ The updaters in this repository:
 - Main app (upstream) releases: https://github.com/lbjlaq/Antigravity-Manager/releases
 
 > **Note:** Merging a PR only updates the code. To publish a downloadable updater version, you must also create a GitHub Release with a `vX.Y.Z` tag.
+
+## Release Workflow
+
+Use this checklist before every updater release:
+
+1. Review open PRs and confirm merge status (`gh pr list --state open`).
+2. Sync `README.md` and `CHANGELOG.md` with merged changes.
+3. Bump updater metadata across platform scripts and packaging files.
+4. Push commit and tag, then publish a GitHub Release.
+
+## Recent PR Review Snapshot
+
+Review date: **2026-02-11**
+
+- Open PRs: none.
+- PR [#27](https://github.com/ercanatay/AntigravityUpdater/pull/27): reviewed the Linux/Docker release parsing fixes and version alignment updates.
+- PR [#26](https://github.com/ercanatay/AntigravityUpdater/pull/26): reviewed critical `eval` removal and safer GitHub release parsing changes.
 
 ## Which Updater Should I Use?
 

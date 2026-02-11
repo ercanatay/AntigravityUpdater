@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.6] - 2026-02-11
+
+### Added
+- Added `README.md` sections for release workflow and a PR review snapshot used before publishing releases.
+
+### Changed
+- Reviewed latest merged PRs [#27](https://github.com/ercanatay/AntigravityUpdater/pull/27) and [#26](https://github.com/ercanatay/AntigravityUpdater/pull/26), and confirmed there were no open PRs before release.
+- Bumped updater metadata, installer metadata, app bundle metadata, and README badge to `1.6.6`.
+
 ## [1.6.5] - 2026-02-10
 
 ### Fixed
